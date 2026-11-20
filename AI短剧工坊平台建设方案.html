@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 短剧工坊（开源版）· 完整建设方案</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --surface:#ffffff; --surface-2:#fafbfc; --border:#e3e7ec;
+    --text:#111827; --muted:#4b5563; --faint:#6b7280;
+    --blue:#2563eb; --blue-soft:#eff6ff; --blue-line:#bfdbfe;
+    --teal:#0f766e; --teal-soft:#f0fdfa; --teal-line:#99f6e4;
+    --amber:#b45309; --amber-soft:#fffbeb; --amber-line:#fde68a;
+    --red:#b91c1c; --red-soft:#fef2f2; --red-line:#fecaca;
+    --violet:#6d28d9; --violet-soft:#f5f3ff; --violet-line:#ddd6fe;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;line-height:1.75;font-size:15px}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  .hero{background:linear-gradient(135deg,#0b1b3f 0%,#12306b 45%,#155e75 100%);color:#fff;padding:54px 0 46px}
+  .hero .eyebrow{display:inline-block;font-size:12px;letter-spacing:.16em;color:#93c5fd;border:1px solid rgba(147,197,253,.45);padding:4px 12px;border-radius:999px}
+  .hero h1{font-size:36px;line-height:1.25;margin:18px 0 10px;letter-spacing:.01em}
+  .hero .vision{margin:14px 0 0;font-size:20px;color:#fff;font-weight:600;letter-spacing:.02em}
+  .hero p{margin:6px 0 0;color:#cbd5e1;max-width:820px;font-size:15px}
+  .hero .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:10px}
+  .hero .meta span{font-size:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);padding:5px 11px;border-radius:6px;color:#e2e8f0}
+  .nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);border-bottom:1px solid var(--border);backdrop-filter:blur(8px)}
+  .nav .wrap{display:flex;gap:6px;overflow-x:auto;padding:9px 24px}
+  .nav a{white-space:nowrap;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px}
+  .nav a:hover{background:var(--blue-soft);color:var(--blue);text-decoration:none}
+  section{padding:44px 0 8px}
+  h2{font-size:24px;margin:0 0 6px;letter-spacing:.01em}
+  h2 .num{color:var(--blue);font-size:14px;display:block;font-weight:600;letter-spacing:.14em;margin-bottom:4px}
+  h3{font-size:17px;margin:26px 0 10px}
+  h4{font-size:15px;margin:18px 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  .lead{font-size:15px;color:var(--faint);margin:0 0 20px;max-width:900px}
+  ul,ol{margin:8px 0 8px 0;padding-left:22px;color:var(--muted)}
+  li{margin:4px 0}
+  strong{color:var(--text)}
+  code{font-family:"SFMono-Regular",Consolas,Monaco,monospace;font-size:12.5px;background:#f1f3f6;border:1px solid #e5e7eb;border-radius:4px;padding:1px 5px;color:#1f2937}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin:14px 0;box-shadow:0 1px 2px rgba(16,24,40,.03)}
+  .grid{display:grid;gap:14px;margin:14px 0}
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .card h3,.card h4{margin-top:0}
+  .card p:last-child,.card ul:last-child{margin-bottom:0}
+  .accent-blue{border-top:3px solid var(--blue)}
+  .accent-teal{border-top:3px solid var(--teal)}
+  .accent-amber{border-top:3px solid var(--amber)}
+  .accent-violet{border-top:3px solid var(--violet)}
+  .kpi{font-size:26px;font-weight:700;line-height:1.2;color:var(--blue)}
+  .kpi small{font-size:12px;font-weight:500;color:var(--faint);display:block;margin-top:4px}
+  .tag{display:inline-block;font-size:11px;line-height:1.5;padding:2px 8px;border-radius:5px;border:1px solid var(--blue-line);background:var(--blue-soft);color:var(--blue);margin:0 4px 4px 0}
+  .tag.p1{background:var(--teal-soft);border-color:var(--teal-line);color:var(--teal)}
+  .tag.p2{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber)}
+  .tag.p3{background:#f3f4f6;border-color:#e5e7eb;color:var(--faint)}
+  .tag.red{background:var(--red-soft);border-color:var(--red-line);color:var(--red)}
+  .tablewrap{overflow-x:auto;margin:12px 0 18px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:var(--surface-2);text-align:left;color:#374151;font-weight:600;padding:10px 13px;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:10px 13px;border-bottom:1px solid #eef0f3;color:var(--muted);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td strong{font-weight:600}
+  .note{border-left:3px solid var(--blue);background:var(--blue-soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13.5px;color:#1e3a8a}
+  .note.warn{border-left-color:var(--amber);background:var(--amber-soft);color:#78350f}
+  .note.risk{border-left-color:var(--red);background:var(--red-soft);color:#7f1d1d}
+  .note.ok{border-left-color:var(--teal);background:var(--teal-soft);color:#134e4a}
+  .steps{counter-reset:st;margin:14px 0;padding:0;list-style:none}
+  .steps li{position:relative;padding:10px 0 10px 46px;border-bottom:1px dashed var(--border);color:var(--muted)}
+  .steps li:last-child{border-bottom:none}
+  .steps li:before{counter-increment:st;content:counter(st);position:absolute;left:0;top:10px;width:28px;height:28px;border-radius:8px;background:var(--blue-soft);color:var(--blue);border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+  .steps b{color:var(--text)}
+  .figure{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin:16px 0;overflow-x:auto}
+  .figure figcaption{font-size:12px;color:var(--faint);text-align:center;margin-top:6px}
+  svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  .phase{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin:12px 0;display:grid;grid-template-columns:160px 1fr;gap:20px}
+  .phase .ph-title{font-weight:700;font-size:16px;color:var(--blue)}
+  .phase .ph-time{font-size:12px;color:var(--faint);font-weight:400;margin-top:2px}
+  .phase ul{margin:0;padding-left:18px;font-size:13.5px}
+  .phase .accept{margin-top:8px;font-size:12.5px;color:var(--teal);background:var(--teal-soft);padding:6px 10px;border-radius:6px;display:inline-block}
+  .divider{height:1px;background:var(--border);margin:34px 0 0}
+  footer{padding:30px 0 50px;color:var(--faint);font-size:12.5px}
+  .small{font-size:12.5px;color:var(--faint)}
+  @media(max-width:820px){.g2,.g3,.g4{grid-template-columns:1fr}.phase{grid-template-columns:1fr;gap:8px}.hero h1{font-size:27px}.hero .vision{font-size:17px}}
+  @media print{.nav{display:none}body{background:#fff}.hero{background:#12306b!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}section{page-break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">OPEN SOURCE · SELF-HOSTED FIRST · 2026.11</span>
+    <h1>AI 短剧工坊（开源版）· 完整建设方案</h1>
+    <p class="vision">项目愿景：人人都能搞创作，不受硬件、算力限制。</p>
+    <p>前期的第一目标是<b>自用</b>——把自己和小团队的短剧生产流程跑顺；随后把可复用的部分以开源项目发布，让任何人都能在自己的设备上、或用云端算力完成同样的创作。本方案覆盖架构、功能、数据、部署、路线与开源运营。</p>
+    <div class="meta">
+      <span>优先级：自用 &gt; 开源可用 &gt; 社区生态</span>
+      <span>形态：Web 工作台 + 算力适配层 + 轻量控制面</span>
+      <span>发布：GitHub 开源，可自部署</span>
+      <span>算力：本地 GPU / 云 GPU / 云端 API 可切换</span>
+    </div>
+  </div>
+</header>
+
+<nav class="nav">
+  <div class="wrap">
+    <a href="#s0">愿景与结论</a><a href="#s1">对标拆解</a><a href="#s2">定位与原则</a><a href="#s3">总体架构</a>
+    <a href="#s4">功能清单</a><a href="#s5">数据模型</a><a href="#s6">核心流程</a><a href="#s7">技术选型</a>
+    <a href="#s8">部署与算力</a><a href="#s9">调度与成本</a><a href="#s10">路线图</a><a href="#s11">预算团队</a>
+    <a href="#s12">风险合规</a><a href="#s13">开源运营</a><a href="#s14">第一步</a><a href="#s15">能力规划</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<section id="s0">
+  <h2><span class="num">00 / VISION &amp; SUMMARY</span>愿景与结论先行</h2>
+  <p class="lead">前期以自用为主线：先把「剧本 → 提示词 → 资产 → 视频 → 成片」这条链路在自己手里跑通、跑稳，再把工具以开源方式发布出去。<b>官网、支付、账号、租户体系等获客与商业化组件全部后置</b>；它们不产生创作价值，只会拖慢前 3 个月。</p>
+  <div class="note ok"><strong>项目愿景：人人都能搞创作，不受硬件、算力限制。</strong><br>落到产品上有三条硬要求：① <b>算力可插拔</b>——同一套流程既能跑在本地显卡，也能跑在云 GPU 或云端 API；② <b>设备无门槛</b>——没有显卡的普通电脑也能完成创作；③ <b>成本可预期</b>——提交前给出估算，设置预算上限，不让「门槛」从硬件变成账单。</div>
+  <div class="grid g4">
+    <div class="card accent-blue"><div class="kpi">3 层<small>创作层 / 控制面 / 算力适配层</small></div></div>
+    <div class="card accent-teal"><div class="kpi">8 步<small>剧本 → 提示词 → 资产 → 视频 → 成片</small></div></div>
+    <div class="card accent-amber"><div class="kpi">12–20 周<small>开源 MVP 可用并发布首个版本</small></div></div>
+    <div class="card accent-violet"><div class="kpi">¥20–40 万<small>首期总投入粗估（见第 11 节）</small></div></div>
+  </div>
+  <div class="note"><strong>核心判断：</strong>壁垒不在「接一个视频模型 API」，而在<strong>流程资产</strong>——结构化提示词规则、角色一致性方案、失败码体系、任务状态机、可复用的项目数据。自用阶段把这些沉淀扎实，开源阶段把它们作为可复用的公共品放出去，社区才会用、会改、会贡献。</div>
+</section>
+
+<section id="s1">
+  <h2><span class="num">01 / BENCHMARK</span>对标产品拆解</h2>
+  <p class="lead">参考 kfchenzhan.com.cn「ComfyUI 短剧工坊」的工程实现与八步流程，但<b>不复制它的商业路径</b>。它把本地脚本工具包装成有版本、有价格的产品；我们把自用工具打磨成开源公共品。</p>
+
+  <h3>它到底是什么</h3>
+  <div class="grid g2">
+    <div class="card accent-blue">
+      <h4>产品形态</h4>
+      <ul>
+        <li><b>官网</b>：项目演示视频、8 步流程、v4 更新点、版本价格、扫码支付、GitHub 入口</li>
+        <li><b>控制台</b>：Python 标准库 + 单文件原生前端，本机跑在 <code>127.0.0.1:8890</code></li>
+        <li><b>生成端</b>：远程 ComfyUI 跑 H3 工作流，LLM / 生图 / 视觉质检均支持本地↔云端切换</li>
+        <li><b>数据</b>：<code>console.db</code>（SQLite）+ 素材目录 + <code>config.json</code></li>
+      </ul>
+    </div>
+    <div class="card accent-teal">
+      <h4>八步制作链</h4>
+      <ol style="margin:0">
+        <li>创建项目（画幅 / 风格 / 集数）</li>
+        <li>剧本：梗概生成或导入原稿</li>
+        <li>拆镜：按场景 / 动作 / 对白拆成镜头表</li>
+        <li>参考资产：角色四视图、场景图与音色锚点，人工批准</li>
+        <li>提示词：扩写为 H3 三段式规范，R2V 自动六段式包装</li>
+        <li>提交生成：T2V / I2V / R2V，批量与成本闸门</li>
+        <li>监控挑片：实时进度、候选比对、失败码诊断</li>
+        <li>精修成片：升清、裁头杂音、字幕/CTA、导出 MP4</li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>它的商业设计（作为参考，不照搬）</h3>
+  <div class="tablewrap"><table>
+    <tr><th>版本</th><th>价格</th><th>定位</th><th>对我们的启示</th></tr>
+    <tr><td><b>v1 / v2</b></td><td>免费开源（MIT）</td><td>跑通制作链 / 固定八步基线</td><td>开源是建立信任与传播的最低成本方式，值得直接采用</td></tr>
+    <tr><td><b>v3 导演台版</b></td><td>¥500</td><td>镜头与版本管理、数据库规则、提示词版本链</td><td>「版本管理」是真需求，应放进开源核心功能</td></tr>
+    <tr><td><b>v4 完整制作版</b></td><td>¥2,000</td><td>多集、原稿续写、超分、多服务器接单、Win/Linux 部署</td><td>多机与超分是进阶能力，开源版可按插件方式逐步放出</td></tr>
+    <tr><td><b>云 GPU</b></td><td>约 ¥2/小时（参考价）</td><td>低配电脑也能用</td><td>与我们的愿景一致，但我们做「用户自带算力/API」，不靠转售算力赚钱</td></tr>
+  </table></div>
+  <p class="small">可借鉴的是它「先讲清楚边界」的写法：软件价格不含 GPU、存储与模型 API 费用，授权范围购买前确认。我们开源版同样要在 README 里讲清楚：软件按现状提供，模型权重与 API 费用由使用者自行承担。</p>
+
+  <h3>它暴露出的短板，就是我们的设计起点</h3>
+  <div class="grid g3">
+    <div class="card"><h4>① 单人本地工具味重</h4><p>SQLite + 单文件前端 + 守护进程，缺少可演进的数据模型与接口边界。我们用 PostgreSQL + 明确 API 分层重写核心。</p></div>
+    <div class="card"><h4>② 算力切换不彻底</h4><p>本地 / 云端切换散落在配置里。我们把它收敛成统一的「算力适配层」，这是实现愿景的关键抽象。</p></div>
+    <div class="card"><h4>③ 交付靠人工</h4><p>安装部署需要用户自己配环境。我们用 Docker Compose 与一键环境检查降低门槛，而不是卖安装包。</p></div>
+  </div>
+</section>
+
+<section id="s2">
+  <h2><span class="num">02 / POSITIONING</span>产品定位与开源原则</h2>
+
+  <h3>一句话定位</h3>
+  <div class="note"><b>开源、自托管的 AI 短剧创作工作台</b>：以项目为中心管理剧本、角色资产、分镜与版本，把 H3 视频生成、超分、合成编排成可追踪、可复现的流程；通过统一的算力适配层，让没有显卡的人用云端 API、有显卡的人用本地 GPU、有多台机器的人用云 GPU 集群，跑的是同一套工作流。</div>
+
+  <h3>愿景拆解：三条产品硬要求</h3>
+  <div class="grid g3">
+    <div class="card accent-blue"><h4>不受硬件限制</h4><p>无显卡设备只跑浏览器与控制面，生成任务交给云端 API 或云 GPU。首次使用不需要下载 40GB 模型。</p></div>
+    <div class="card accent-teal"><h4>不受算力限制</h4><p>算力是「可插拔后端」，不是产品的一部分。用户随时切换、叠加自己的机器，不被单一供应商绑定。</p></div>
+    <div class="card accent-violet"><h4>人人都能创作</h4><p>把 H3 提示词规范、角色一致性、失败诊断封装成向导和规则，用户写故事，不写参数。</p></div>
+  </div>
+
+  <h3>前期使用者与开源受众</h3>
+  <div class="tablewrap"><table>
+    <tr><th>对象</th><th>痛点</th><th>我们提供的价值</th><th>阶段</th></tr>
+    <tr><td><b>自己 / 核心小团队</b></td><td>多集制作中素材、提示词、版本混乱；抽卡成本高</td><td>自用提效：流程可追溯、可重跑、成本可见</td><td>第一优先级</td></tr>
+    <tr><td><b>开源创作者 / 独立开发者</b></td><td>想要可改造的流水线基线，不想从零写</td><td>MIT / Apache-2.0 代码 + 示例剧本 + 一键检查脚本</td><td>首个开源版本</td></tr>
+    <tr><td><b>无显卡用户</b></td><td>看得到工具却跑不动模型</td><td>纯 API 模式，普通电脑即可完成全流程</td><td>核心验收场景</td></tr>
+    <tr><td><b>社区与未来用户</b></td><td>模板、托管、定制支持</td><td>模板市场、托管实例、技术支持（均后置，不进前两期）</td><td>后期可选</td></tr>
+  </table></div>
+
+  <h3>价值回流与长期选项（前期不以变现为目标）</h3>
+  <div class="grid g2">
+    <div class="card accent-teal">
+      <h4>1）自用提效（首要价值）</h4>
+      <p>减少重复找文件、重复写提示词、重复试错的时间；按项目沉淀角色资产与提示词版本，让下一集比上一集更快。</p>
+    </div>
+    <div class="card accent-blue">
+      <h4>2）开源影响力</h4>
+      <p>GitHub Star、外部 Issue 与 PR、公开案例与硬件运行报告。这些是后续一切可能性的前提，也是验证「人人可用」的真实反馈。</p>
+    </div>
+    <div class="card accent-violet">
+      <h4>3）社区赞助与支持（后期可选）</h4>
+      <p>GitHub Sponsors / 爱发电等自愿赞助；有偿技术支持与定制开发。只有在项目被真实使用后才有意义。</p>
+    </div>
+    <div class="card accent-amber">
+      <h4>4）托管实例 / 企业定制（远期可选）</h4>
+      <p>若社区规模与合规条件成熟，再考虑提供开箱即用的托管服务。它不进入前两期规划，也不影响开源版本的功能完整性。</p>
+    </div>
+  </div>
+
+  <div class="note warn"><strong>自用成本测算（不是定价）：</strong>一集 60 秒成片约 6–10 个镜头，按平均 3 次抽卡 = 200–300 秒输出；全用 768P API 约 ¥100–150/集，全 2K 约 ¥160–240/集，加 LLM/生图/超分后的自用预算建议按 <b>¥200–400/集</b> 准备。有本地显卡时用机时与电费替换这部分支出，但要计入排队与失败率。</div>
+</section>
+
+<section id="s3">
+  <h2><span class="num">03 / ARCHITECTURE</span>总体架构</h2>
+  <p class="lead">三层解耦：<b>创作层</b>负责体验，<b>控制面</b>负责项目数据与任务编排，<b>算力适配层</b>负责把同一个任务翻译成 API 调用或 ComfyUI 工作流。官网与社区只在图中以虚线标出——它们是后期可选模块，不进入首版开发。</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 1000 510" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,Microsoft YaHei,sans-serif">
+    <defs>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#64748b"/></marker>
+    </defs>
+    <rect x="0" y="0" width="1000" height="510" fill="#ffffff"/>
+    <rect x="300" y="12" width="400" height="64" rx="10" fill="#f9fafb" stroke="#d1d5db" stroke-dasharray="6 4"/>
+    <text x="500" y="38" text-anchor="middle" font-size="14" font-weight="600" fill="#6b7280">官网与社区（后期可选）</text>
+    <text x="500" y="60" text-anchor="middle" font-size="11.5" fill="#9ca3af">README · 演示片 · Issue / PR · 托管入口</text>
+
+    <text x="16" y="134" font-size="12" fill="#6b7280">① 创作层</text>
+    <text x="16" y="274" font-size="12" fill="#6b7280">② 控制面（可本机运行）</text>
+    <text x="16" y="422" font-size="12" fill="#6b7280">③ 算力适配层</text>
+    <line x1="14" y1="118" x2="986" y2="118" stroke="#e5e7eb"/>
+    <line x1="14" y1="258" x2="986" y2="258" stroke="#e5e7eb"/>
+    <line x1="14" y1="406" x2="986" y2="406" stroke="#e5e7eb"/>
+
+    <rect x="120" y="128" width="760" height="118" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+    <text x="500" y="152" text-anchor="middle" font-size="15" font-weight="700" fill="#134e4a">Web 工作台（React + TypeScript）</text>
+    <g font-size="11.5" fill="#334155">
+      <rect x="138" y="168" width="112" height="52" rx="7" fill="#fff" stroke="#ccfbf1"/><text x="194" y="188" text-anchor="middle">项目 / 多集</text><text x="194" y="207" text-anchor="middle">剧本编辑</text>
+      <rect x="262" y="168" width="112" height="52" rx="7" fill="#fff" stroke="#ccfbf1"/><text x="318" y="188" text-anchor="middle">H3 提示词</text><text x="318" y="207" text-anchor="middle">规则 / 版本</text>
+      <rect x="386" y="168" width="112" height="52" rx="7" fill="#fff" stroke="#ccfbf1"/><text x="442" y="188" text-anchor="middle">参考资产库</text><text x="442" y="207" text-anchor="middle">角色 / 场景</text>
+      <rect x="510" y="168" width="112" height="52" rx="7" fill="#fff" stroke="#ccfbf1"/><text x="566" y="188" text-anchor="middle">分镜 / 导演台</text><text x="566" y="207" text-anchor="middle">镜头契约</text>
+      <rect x="634" y="168" width="112" height="52" rx="7" fill="#fff" stroke="#ccfbf1"/><text x="690" y="188" text-anchor="middle">任务 / 进度</text><text x="690" y="207" text-anchor="middle">成本预估</text>
+      <rect x="758" y="168" width="104" height="52" rx="7" fill="#fff" stroke="#ccfbf1"/><text x="810" y="188" text-anchor="middle">成片 / 导出</text><text x="810" y="207" text-anchor="middle">字幕 / 合成</text>
+    </g>
+
+    <rect x="120" y="268" width="760" height="126" rx="10" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <g>
+      <rect x="134" y="280" width="234" height="102" rx="8" fill="#fff" stroke="#e9e5fd"/>
+      <text x="251" y="304" text-anchor="middle" font-size="13.5" font-weight="700" fill="#5b21b6">业务 API（FastAPI）</text>
+      <text x="251" y="328" text-anchor="middle" font-size="11.5" fill="#334155">项目 / 剧本 / 资产 / 版本</text>
+      <text x="251" y="350" text-anchor="middle" font-size="11.5" fill="#334155">规则引擎 / 提示词模板</text>
+      <text x="251" y="372" text-anchor="middle" font-size="11.5" fill="#334155">REST + WebSocket 推送</text>
+      <rect x="383" y="280" width="234" height="102" rx="8" fill="#fff" stroke="#e9e5fd"/>
+      <text x="500" y="304" text-anchor="middle" font-size="13.5" font-weight="700" fill="#5b21b6">任务调度器</text>
+      <text x="500" y="328" text-anchor="middle" font-size="11.5" fill="#334155">状态机 / 重试 / 超时</text>
+      <text x="500" y="350" text-anchor="middle" font-size="11.5" fill="#334155">能力匹配 / 租约分发</text>
+      <text x="500" y="372" text-anchor="middle" font-size="11.5" fill="#334155">预算闸门 / 成本归集</text>
+      <rect x="632" y="280" width="234" height="102" rx="8" fill="#fff" stroke="#e9e5fd"/>
+      <text x="749" y="304" text-anchor="middle" font-size="13.5" font-weight="700" fill="#5b21b6">基础设施</text>
+      <text x="749" y="328" text-anchor="middle" font-size="11.5" fill="#334155">PostgreSQL · Redis</text>
+      <text x="749" y="350" text-anchor="middle" font-size="11.5" fill="#334155">MinIO / 本地目录</text>
+      <text x="749" y="372" text-anchor="middle" font-size="11.5" fill="#334155">日志 / 监控</text>
+    </g>
+
+    <rect x="120" y="414" width="760" height="76" rx="10" fill="#fef2f2" stroke="#fecaca"/>
+    <g font-size="11.5" fill="#334155">
+      <rect x="134" y="424" width="234" height="56" rx="8" fill="#fff" stroke="#fecaca"/>
+      <text x="251" y="444" text-anchor="middle" font-size="13.5" font-weight="700" fill="#991b1b">云端 API 后端</text>
+      <text x="251" y="466" text-anchor="middle">无显卡首选 · 按量付费</text>
+      <rect x="383" y="424" width="234" height="56" rx="8" fill="#fff" stroke="#fecaca"/>
+      <text x="500" y="444" text-anchor="middle" font-size="13.5" font-weight="700" fill="#991b1b">本地 GPU 后端</text>
+      <text x="500" y="466" text-anchor="middle">ComfyUI + H3 / SeedVR2</text>
+      <rect x="632" y="424" width="234" height="56" rx="8" fill="#fff" stroke="#fecaca"/>
+      <text x="749" y="444" text-anchor="middle" font-size="13.5" font-weight="700" fill="#991b1b">云 GPU / 多机后端</text>
+      <text x="749" y="466" text-anchor="middle">Agent 注册 · 能力分流（后期）</text>
+    </g>
+
+    <g stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+      <path d="M500 76 L500 128" stroke-dasharray="5 4"/>
+      <path d="M500 246 L500 268"/>
+      <path d="M500 394 L500 414"/>
+    </g>
+    <text x="500" y="502" text-anchor="middle" font-size="11" fill="#6b7280">算力后端对上层暴露同一套任务接口；切换后端不改变剧本、提示词与项目数据</text>
+  </svg>
+  <figcaption>图 1：三层架构。虚线框为后期可选的官网与社区；算力适配层是「不受硬件、算力限制」愿景的技术落点。</figcaption>
+  </div>
+
+  <h3>三种算力执行模式（同一工作台，按设备选择）</h3>
+  <div class="grid g3">
+    <div class="card accent-blue"><h4>A. 纯 API 模式（先做）</h4><p>本机只跑工作台与控制面，生成全走 MiniMax H3 / LLM / 生图 API。<b>目标：普通电脑也能创作。</b>无需下载模型、无需显卡，按量付费且预算可控。</p></div>
+    <div class="card accent-teal"><h4>B. 本地 GPU 模式（随后）</h4><p>Docker Compose 一键起控制面 + ComfyUI，本机显卡跑推理，数据不出内网。<b>目标：有卡用户的私密与批量生产。</b>模型走国内镜像预热。</p></div>
+    <div class="card accent-violet"><h4>C. 云 GPU / 多机分体（后期）</h4><p>GPU 机器装轻量 Agent，主动注册能力标签并按任务类型接单；轻电脑只跑网页。<b>目标：低配设备与多机工作室。</b></p></div>
+  </div>
+  <div class="note"><b>统一原则：</b>三种模式共用同一套任务接口和数据模型，区别只在执行后端。先做 A 验证愿景，再补 B 覆盖有卡用户，C 放到开源增强阶段。不要为某一种模式单独 fork 代码。</div>
+</section>
+
+<section id="s4">
+  <h2><span class="num">04 / FEATURES</span>功能清单与优先级</h2>
+  <p class="lead">图例：<span class="tag">MVP 必做</span><span class="tag p1">P1 开源增强</span><span class="tag p2">P2 社区共建</span><span class="tag p3">P3 后期可选</span>。首版只做 MVP；算力适配与成本预估属于 MVP，因为它们就是愿景本身。</p>
+
+  <div class="tablewrap"><table>
+    <tr><th style="width:120px">模块</th><th>功能点</th><th>验收标准（可测试）</th><th style="width:110px">优先级</th></tr>
+    <tr><td rowspan="5"><b>项目与剧本</b></td><td>项目 CRUD、封面、画幅（9:16 / 16:9）、风格预设、集数管理</td><td>能创建项目并按集切换，配置持久化</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>剧本编辑器（正文/人物/动作/对白结构化），支持导入 txt / JSON / Markdown</td><td>导入示例剧本后自动拆段，可手工调整</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>AI 生成梗概 / 改写 / 续写，保留改写前后对照</td><td>一次改写耗时 &lt; 30s，可回滚</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>原稿续写与上下文衔接（读取前文摘要）</td><td>第 N 集提示词能引用前集人物状态</td><td><span class="tag p1">P1</span></td></tr>
+    <tr><td>剧本版本历史与 diff</td><td>可查看任意两版差异</td><td><span class="tag p2">P2</span></td></tr>
+    <tr><td rowspan="4"><b>提示词工程</b></td><td>权威 H3 提示词 Schema：三段式完整字段 + 六段式完整包装 + <code>(S1)/(S2)↔voice_id</code> 映射</td><td>含对白且模式支持音频时才强制说话人 ID；Schema 可版本化回溯</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>R2V 自动六段式完整包装并附带参考图；主参考写入 <code>subject_definitions</code></td><td>六段齐备，带参考图提交时自动转换，无需用户理解格式</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>提示词版本链、A/B 重试、失败原因回填</td><td>同一镜头可保存多版并标记采用版</td><td><span class="tag p1">P1</span></td></tr>
+    <tr><td>规则文件热加载（prompt rules 可编辑）</td><td>改规则无需重启服务</td><td><span class="tag p1">P1</span></td></tr>
+    <tr><td rowspan="4"><b>参考资产</b></td><td>角色四视图（正/脸/侧/背）、场景图、分镜图生成</td><td>角色 4 张图生成 &lt; 3 分钟</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>资产状态表：身份 / 发型 / 服装 / 音色 / 批准状态</td><td>未批准资产不能被镜头引用</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td><b>镜头↔参考图↔音色锚点确定性绑定并锁定 <code>asset_version</code></b></td><td>旧镜头重生成时不会因资产更新而变脸</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>视觉质检（人数、穿帮、服装一致性）；人工批准为 MVP 硬门槛</td><td>未批准资产禁止引用；自动打分留 P1</td><td><span class="tag">MVP 人工</span><span class="tag p1">P1 自动</span></td></tr>
+    <tr><td>资产库跨项目复用、社区风格包</td><td>一套角色可导入新项目</td><td><span class="tag p2">P2</span></td></tr>
+    <tr><td rowspan="6"><b>生成与任务</b></td><td><b>算力后端可插拔</b>：云端 API / 本地 GPU / 云 GPU 通过统一接口切换</td><td>同一任务切换后端后，参数与结果结构一致</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td><b>累计成本闸门</b>：项目/日预算 + 已花 + 在途冻结原子校验，单价表可配置</td><td>(预估 + 已花 + 在途 ≤ 上限) 才放行，超预算阻断</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>T2V / I2V / R2V 三种模式，分辨率/时长/步数可调</td><td>提交后返回任务 ID，可查状态</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>任务列表、实时进度（WebSocket）、结果自动回传与落盘</td><td>状态变化 2 秒内推到前端</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>最小失败码表 + 可重试分类 + 中文诊断 + 一键重试</td><td>失败按 PROVIDER_/PROMPT_/ASSET_/SCHEDULER_/COST_ 命名空间归类并给出建议动作</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>链式衔接、完整失败码与一键重试 UI、断点续跑</td><td>服务重启后任务恢复</td><td><span class="tag p1">P1</span></td></tr>
+    <tr><td>队列优先级、多后端并发配额</td><td>不同后端可独立限流</td><td><span class="tag p2">P2</span></td></tr>
+    <tr><td rowspan="4"><b>后期与成片</b></td><td>片段预览、选中/弃用标记、自动裁剪 H3 开头杂音（约 0.12–0.16s）</td><td>合成后首帧无杂音</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>一键拼接、字幕（SRT）、片尾 CTA</td><td>导出 MP4 可直接发布</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>后端无关的「升清（upscale）」抽象：API 模式走 768P→2K 重生，本地模式走 SeedVR2（2× 两次）</td><td>两种后端目标尺寸一致、相邻帧无闪烁抽检</td><td><span class="tag">MVP 抽象</span><span class="tag p1">P1 本地</span></td></tr>
+    <tr><td>多机位/多版本成片对比、时间线粗编</td><td>可切换版本导出</td><td><span class="tag p2">P2</span></td></tr>
+    <tr><td rowspan="5"><b>工程能力</b></td><td>单用户本地模式（默认），配置用 <code>.env</code> / 设置页，无需登录</td><td>clone 后按 README 即可启动；密钥仅服务端注入，绝不下发浏览器</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>Docker Compose 一键启动 + 一键环境自检脚本</td><td>缺依赖时逐项给出修复建议</td><td><span class="tag">MVP</span></td></tr>
+    <tr><td>按项目 / 镜头 / 模型出成本看板，任务日志可回溯</td><td>能回答「哪一版提示词最烧钱」</td><td><span class="tag p1">P1</span></td></tr>
+    <tr><td>可选账号与项目权限（多人共用一台服务时再开）</td><td>开启后用户之间数据隔离</td><td><span class="tag p2">P2</span></td></tr>
+    <tr><td>积分 / 支付 / 订单 / 授权 License；开放 API 与插件市场</td><td>仅在托管或商业形态启用</td><td><span class="tag p3">P3</span></td></tr>
+  </table></div>
+
+  <div class="note warn"><b>MVP 明确不做：</b>官网落地页、支付与积分、注册登录与多租户、节点图可视化编辑器、多模型路由、团队协作评论、模板市场、移动端 App。前期所有精力给「自用闭环 + 算力可切换 + 成本可见」。</div>
+</section>
+
+<section id="s5">
+  <h2><span class="num">05 / DATA MODEL</span>核心数据模型</h2>
+  <p class="lead">用 PostgreSQL 做唯一事实源；生成物只存对象存储地址或本地相对路径，不存二进制进数据库。所有生成物带 <code>version</code> 与 <code>parent_id</code>，支撑版本链与复现。开源 MVP 可以先只建核心表，商业化表留给后期。</p>
+
+  <div class="tablewrap"><table>
+    <tr><th>表</th><th>关键字段</th><th>说明</th></tr>
+    <tr><td><code>users / tenants</code></td><td>id, phone, role, tenant_id, quota_concurrency</td><td>开源 MVP 可不启用；多人使用时再加</td></tr>
+    <tr><td><code>projects</code></td><td>id, name, aspect_ratio, style_preset, cover_url, status, budget_total, budget_daily</td><td>项目配置（画幅/风格）+ 预算上限</td></tr>
+    <tr><td><code>episodes</code></td><td>id, project_id, index, title, script_text, summary, duration_target</td><td>多集剧本与前情摘要</td></tr>
+    <tr><td><code>shots</code></td><td>id, episode_id, index, location, action, dialogue, prompt_text, duration, asset_refs, asset_version, adopted_task_id</td><td>镜头是生成任务最小单位；<code>asset_version</code> 锁定参考资产版本</td></tr>
+    <tr><td><code>assets</code></td><td>id, project_id, type(role/scene/storyboard), name, appearance_json, voice_id, approved, image_url, version</td><td>角色锚点图与状态表</td></tr>
+    <tr><td><code>task_assets</code></td><td>id, task_id, asset_id, asset_version, is_primary</td><td>任务与镜头引用的参考图/音色锚点绑定，锁定版本以复现一致性</td></tr>
+    <tr><td><code>prompts</code></td><td>id, shot_id, version, content, rule_set_id, parent_id, created_by</td><td>提示词版本链</td></tr>
+    <tr><td><code>rule_sets</code></td><td>id, name, version, schema_json, is_default</td><td>权威 H3 提示词 Schema 与规则集，支撑版本化与热加载</td></tr>
+    <tr><td><code>backend_configs</code></td><td>id, type(api/local_gpu/cloud_gpu), endpoint, model, credentials_ref, priority</td><td>算力适配层的可插拔后端配置；密钥不明文入库、绝不下发浏览器</td></tr>
+    <tr><td><code>tasks</code></td><td>id, shot_id, kind, mode(t2v/i2v/r2v), backend_id, params_json, status, attempt, failure_code, cost_estimate_cents, cost_reserved_cents, cost_actual_cents, idempotency_key</td><td>任务主表；三段成本对应预估/预留/实际，<code>failure_code</code> 支撑最小失败码表</td></tr>
+    <tr><td><code>task_events</code></td><td>id, task_id, ts, stage, message, payload_json</td><td>进度与失败诊断的时序日志</td></tr>
+    <tr><td><code>gpu_nodes</code></td><td>id, name, capabilities_json, vram_gb, endpoint, token_hash, heartbeat_at, status</td><td>后期启用；能力标签如 <code>{model:h3, mode:r2v, vram:24, upscale:seedvr2}</code></td></tr>
+    <tr><td><code>price_table</code></td><td>id, backend_type, model, unit, unit_price_cents, effective_at</td><td>可配置单价，避免硬编码刊例价失真</td></tr>
+    <tr><td><code>outputs</code></td><td>id, task_id, url, duration, resolution, is_adopted, sha256</td><td>生成结果与选中状态</td></tr>
+    <tr><td><code>orders / credit_ledger / licenses</code></td><td>id, user_id, amount, pay_status, credits, balance_after, machine_fingerprint</td><td>仅托管/商业形态启用，开源版不建表</td></tr>
+  </table></div>
+
+  <div class="note warn"><b>口径统一：</b>采用版以 <code>outputs.is_adopted</code> 为唯一真源，<code>shots.adopted_task_id</code> 为冗余字段并同步；资产引用以 <code>task_assets.asset_version</code> 锁定，避免旧镜头重生成时变脸。</div>
+
+  <h3>任务状态机</h3>
+  <div class="figure">
+  <svg viewBox="0 0 1000 190" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,Microsoft YaHei,sans-serif">
+    <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#64748b"/></marker></defs>
+    <rect x="0" y="0" width="1000" height="190" fill="#fff"/>
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="20" y="60" width="112" height="50" rx="8" fill="#f3f4f6" stroke="#d1d5db"/><text x="76" y="90" fill="#1f2937">created</text>
+      <rect x="170" y="60" width="112" height="50" rx="8" fill="#eff6ff" stroke="#bfdbfe"/><text x="226" y="90" fill="#1e3a8a">queued</text>
+      <rect x="320" y="60" width="112" height="50" rx="8" fill="#fffbeb" stroke="#fde68a"/><text x="376" y="90" fill="#92400e">leased</text>
+      <rect x="470" y="60" width="112" height="50" rx="8" fill="#f5f3ff" stroke="#ddd6fe"/><text x="526" y="90" fill="#5b21b6">running</text>
+      <rect x="620" y="60" width="112" height="50" rx="8" fill="#f0fdfa" stroke="#99f6e4"/><text x="676" y="90" fill="#134e4a">uploaded</text>
+      <rect x="770" y="60" width="112" height="50" rx="8" fill="#ecfdf5" stroke="#a7f3d0"/><text x="826" y="90" fill="#065f46">succeeded</text>
+      <rect x="470" y="140" width="180" height="42" rx="8" fill="#fef2f2" stroke="#fecaca"/><text x="560" y="166" fill="#991b1b">failed / retryable</text>
+      <rect x="770" y="140" width="180" height="42" rx="8" fill="#fef2f2" stroke="#fecaca"/><text x="860" y="166" fill="#991b1b">dead_letter（人工介入）</text>
+    </g>
+    <g stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#ar2)">
+      <path d="M132 85 L170 85"/><path d="M282 85 L320 85"/><path d="M432 85 L470 85"/><path d="M582 85 L620 85"/><path d="M732 85 L770 85"/>
+      <path d="M526 110 L526 140"/><path d="M650 161 L770 161"/>
+      <path d="M560 140 C440 155 330 130 282 85"/>
+    </g>
+    <text x="500" y="30" text-anchor="middle" font-size="11.5" fill="#6b7280">leased = 后端抢到任务租约；失败统一回到 queued 重新派单；重试 3 次进死信；另有 cancelled 终态</text>
+  </svg>
+  <figcaption>图 2：任务状态机。所有状态迁移写 <code>task_events</code>；failed 回退到 queued 而非 leased，避免再次绑定坏节点；后端类型变化时状态机不变。</figcaption>
+  </div>
+</section>
+
+<section id="s6">
+  <h2><span class="num">06 / WORKFLOW</span>端到端制作流程</h2>
+  <p class="lead">这是使用者真正感知到的产品，也是所有技术选型的出发点。每一步都要有「可编辑、可重跑、可追溯」三个属性；<b>无显卡用户走 API 后端的步骤完全一致</b>，这正是愿景的体验验证。</p>
+  <ol class="steps">
+    <li><b>创建项目</b>：填片名、选择 9:16 或 16:9、风格（3D 写实/漫剧）、集数、目标单集时长 → 生成项目骨架。</li>
+    <li><b>剧本</b>：粘贴梗概让 LLM 生成分集大纲，或导入已有原稿；AI 改写后人工确认，保存版本。</li>
+    <li><b>拆镜</b>：按「场景 / 人物动作 / 对白 / 时长」拆成镜头表，每个镜头生成结构化字段，缺字段高亮。</li>
+    <li><b>参考资产</b>：为每个角色生成四视图、场景图与音色锚点；人工批准为硬门槛，并锁定 <code>asset_version</code>。</li>
+    <li><b>提示词</b>：规则引擎按权威 Schema 扩写为 H3 三段式；对白按 <code>(S1)/(S2)↔voice_id</code> 绑定；R2V 自动六段式完整包装并指定主参考。</li>
+    <li><b>提交生成</b>：执行<b>累计成本闸门</b>（预估 + 已花 + 在途 ≤ 上限）并确认；按镜头批量建任务，选择 T2V/I2V/R2V。</li>
+    <li><b>监控与挑片</b>：WebSocket 实时进度；每段生成 2–4 个候选，人工选中或让质检模型初筛；失败按最小错误码一键重试。</li>
+    <li><b>精修成片</b>：后端无关的「升清」——API 模式走 768P→2K 重生，本地模式用 SeedVR2（2× 两次）；裁头杂音、拼字幕与片尾 CTA，导出 MP4。</li>
+  </ol>
+  <div class="note"><b>卡点与闸门分开：</b>第 2、4、5 步是「人工质量确认」，唯一强制的<b>成本闸门</b>在提交步：做 (预估 + 已花 + 在途冻结 ≤ 上限) 原子校验，提交时冻结、成功转实际、失败释放。AI 短剧最大的成本是抽卡，一次错误提示词批量生成 20 段，成本直接翻几倍。</div>
+</section>
+
+<section id="s7">
+  <h2><span class="num">07 / TECH STACK</span>技术选型</h2>
+  <div class="tablewrap"><table>
+    <tr><th>层</th><th>选型</th><th>理由 / 替代方案</th></tr>
+    <tr><td>工作台前端</td><td>React 19 + Vite + TypeScript + Tailwind CSS；Zustand / TanStack Query；Monaco Editor（剧本）</td><td>官网后置，前端只需工作台；后期需要官网时可加 Next.js 静态导出，不影响主体</td></tr>
+    <tr><td>业务后端</td><td>Python 3.11 + FastAPI + SQLAlchemy + Alembic + Pydantic</td><td>与 ComfyUI / AI 生态同语言；规则引擎与 prompt 模板直接用 Python 写</td></tr>
+    <tr><td><b>算力适配层</b></td><td>统一 Provider 接口：<code>cloud_api</code> / <code>local_comfyui</code> / <code>cloud_gpu</code>；方法集含 estimate/submit/poll/fetch/cancel/capabilities/normalize_error</td><td>愿景的核心抽象；A/B 模式适配器运行在控制面进程，C 模式控制在控制面、执行在 Agent；新增后端只写适配器</td></tr>
+    <tr><td>异步与调度</td><td>Redis + Celery（或 Dramatiq/Arq）；任务租约用 Redis sorted set + Lua 脚本</td><td>比自研守护进程可靠；单机起步可先用 <code>BackgroundTasks</code> 顶一段</td></tr>
+    <tr><td>数据库/存储</td><td>PostgreSQL 16 + Redis 7 + MinIO（自托管）或本地目录（单机模式）</td><td>不用 SQLite 作为事实源：并发、事务与版本链会出问题</td></tr>
+    <tr><td>实时推送</td><td>WebSocket（FastAPI 原生）/ SSE；消息以 <code>task_events</code> 为源</td><td>断线重连后按 task_id 补拉历史事件</td></tr>
+    <tr><td>本地 GPU 节点</td><td>ComfyUI HTTP API（<code>POST /prompt</code>、<code>GET /history</code>、<code>/view</code>）+ 本地 Worker 封装</td><td>同机部署时可直接进程调用；多机时用轻量 Agent 主动外连，无需公网 IP</td></tr>
+    <tr><td>推理框架</td><td>ComfyUI ≥ 0.30.0 + Comfy-Org/MiniMax-H3 节点；H3 pruned int8 权重 + TurboLoRA + SageAttention；SeedVR2 Video Upscaler 自定义节点</td><td>2K 重生/Context-IR 目前主要走 API；本地开源权重以 768p 为主，别把 2K 当默认能力</td></tr>
+    <tr><td>文本 / 生图 / 质检</td><td>LLM 走 OpenAI 兼容接口（DeepSeek / 通义 / 本地 LM Studio）；生图云端 API 优先；质检用多模态模型</td><td>与算力适配层共用同一个 Provider Registry 与降级逻辑，不另建一套</td></tr>
+    <tr><td>视频后处理</td><td>FFmpeg（裁剪、拼接、字幕烧录、码率控制），封装成独立 worker</td><td>与 GPU 任务分离，普通 CPU 机器即可跑</td></tr>
+    <tr><td>支付（后期可选）</td><td>微信支付 Native 扫码 + 支付宝当面付；回调签名校验 + 幂等表</td><td>仅在托管形态启用；需企业主体、ICP 备案与支付资质</td></tr>
+    <tr><td>运维</td><td>Docker Compose（轻量 all-in-one profile 与 PG+Redis+MinIO 标准 profile 二选一）+ Nginx（可选）；模型走 ModelScope / 国内镜像预置</td><td>Windows 本地 GPU 需写清 WSL2 还是原生 ComfyUI 进程；模型 40GB 级别务必预热；环境检查脚本逐项报缺失</td></tr>
+  </table></div>
+  <div class="note warn"><b>硬件现实检查：</b>H3 社区版原生 768p、4–15 秒；pruned int8 整套权重约 40GB 磁盘。社区实测 3060 12G 生成 10 秒约 1 小时（无 Turbo），5090 约 84 秒；SeedVR2 超分舒适区是 24GB 显存，12–16GB 需 FP8/GGUF + BlockSwap 且慢数倍。<b>所以默认引导无显卡用户走云端 API，别让他下载 40GB 模型——这正是愿景的落点。</b>所有 API Key 只从 <code>.env</code>/环境变量在服务端注入，绝不下发浏览器：密钥泄露等价于账单失守。</div>
+</section>
+
+<section id="s8">
+  <h2><span class="num">08 / DEPLOYMENT</span>部署与算力方案</h2>
+  <div class="grid g3">
+    <div class="card accent-blue">
+      <h4>A. 纯 API 模式（默认，先做）</h4>
+      <ol>
+        <li>本机跑 React 工作台 + FastAPI 控制面（Docker Compose 或本地进程）</li>
+        <li>算力全部走 MiniMax H3 / LLM / 生图云端 API，零模型下载、零显卡依赖</li>
+        <li>配置里填自己的 API Key，成本自己可见、上限自己设</li>
+        <li>这是「无显卡也能创作」的验收场景</li>
+      </ol>
+      <p class="small">优点：门槛最低、2–4 周可用；缺点：按量付费，需要成本闸门。</p>
+    </div>
+    <div class="card accent-teal">
+      <h4>B. 本地 GPU 模式（开源版主场景）</h4>
+      <ol>
+        <li>Compose 同时起工作台、控制面与 ComfyUI</li>
+        <li><code>scripts/check_env.py</code> 式一键环境自检，逐项给修复建议</li>
+        <li>模型从国内镜像下载，支持离线导入模型包</li>
+        <li>本机 GPU 跑视频/超分，云端 LLM 兜底文本与生图</li>
+      </ol>
+      <p class="small">优点：数据不出内网、批量成本更低；缺点：需要显卡与磁盘空间。</p>
+    </div>
+    <div class="card accent-violet">
+      <h4>C. 云 GPU / 多机分体（后期）</h4>
+      <ol>
+        <li>控制面跑在轻量主机或本机</li>
+        <li>GPU 机器装 Agent，WireGuard / Tailscale 组网，主动注册</li>
+        <li>能力标签分流：图像 / 视频 / 超分各自独立接单</li>
+        <li>模型预置 + 磁盘缓存 + 节点健康检查</li>
+      </ol>
+      <p class="small">优点：低配设备与多机都能用；缺点：运维复杂度最高，放 P1/P2。</p>
+    </div>
+  </div>
+  <div class="note"><b>统一原则：</b>三种模式共用同一套任务接口和数据模型，区别只在「算力后端配置」。默认交付<b>轻量 all-in-one profile</b>（本地目录 + 内存队列，标注迁移到 PG 的路径），标准 profile 用 PG+Redis+MinIO；Windows 本地 GPU 要明确 WSL2 或原生 ComfyUI 的支持范围。不要为某一种模式单独维护分支。</div>
+</section>
+
+<section id="s9">
+  <h2><span class="num">09 / SCHEDULING &amp; COST</span>调度与成本可见</h2>
+  <p class="lead">调度器既要服务多机场景，也要服务单人单机。核心不是「把机器塞满」，而是让任何设备都能以可预期的方式完成创作——这是愿景在工程上的第二层落点。</p>
+  <h3>调度器设计要点</h3>
+  <div class="grid g2">
+    <div class="card"><h4>能力匹配</h4><p>节点上报 <code>capabilities_json</code>，例如 <code>{"model":"h3","mode":["r2v","i2v"],"vram":24,"upscale":"seedvr2"}</code>。调度器按任务需求筛选候选节点，避免把 R2V 派给没加载 Ref2VA 权重的机器（否则会悄悄回退 FL2VA，身份锁定变弱）。</p></div>
+    <div class="card"><h4>租约与幂等</h4><p>派单写 30 秒租约并续期；心跳丢失则任务回队列。提交侧用 <code>idempotency_key</code> 去重，网络重试不会重复生成、重复扣费。</p></div>
+    <div class="card"><h4>失败与重试</h4><p>错误分「可重试」（超时、节点离线、OOM）与「不可重试」（提示词违规、参数非法）。指数退避重试 3 次后进死信队列，人工可见。API 后端要把供应商错误码翻译成中文诊断。</p></div>
+    <div class="card"><h4>成本归集</h4><p>每个任务记录 <code>cost_estimate_cents</code> / <code>cost_reserved_cents</code> / <code>cost_actual_cents</code>：提交时冻结预留、成功转实际、失败释放。API 按输出秒数 × 单价，GPU 按占用机时；按项目、集、镜头出报表。</p></div>
+  </div>
+  <div class="card accent-teal">
+    <h4>算力适配器接口（伪代码）</h4>
+    <p><code>class Backend: capabilities(); health(); estimate(task) -&gt; Cost; submit(task) -&gt; task_id; poll(task_id) -&gt; Progress; fetch(task_id) -&gt; Artifact(storage_uri, sha256); cancel(task_id); normalize_error(provider_error) -&gt; FailureCode</code></p>
+    <p class="small">Artifact 必须含规范化 <code>storage_uri</code> 与 <code>sha256</code>：API 模式上传为 no-op，本地/云 GPU 由 Worker/Agent 主动推送对象存储（控制面无法拉取 NAT 后的文件）。上层业务只认 <code>Backend</code>，切换后端不改变剧本、提示词和项目数据。</p>
+  </div>
+
+  <h3>成本参考表（自用预算，不是对外售价）</h3>
+  <div class="tablewrap"><table>
+    <tr><th>项目</th><th>参考成本</th><th>备注</th></tr>
+    <tr><td>H3 API 768P 输出</td><td>¥0.50 / 秒</td><td>公开刊例价，按输出秒数计</td></tr>
+    <tr><td>H3 API 2K 输出</td><td>¥0.80 / 秒</td><td>2K 未开源，走 API</td></tr>
+    <tr><td>768P → 2K 重生</td><td>¥0.30 / 秒</td><td>先 768p 试镜再升 2K，最省钱</td></tr>
+    <tr><td>云 GPU 租用</td><td>约 ¥1.5–3 / 小时</td><td>24G 级卡价格波动大，需设上限</td></tr>
+    <tr><td>LLM / 生图 / 视觉质检</td><td>按 token / 张计</td><td>设置单次调用预算上限</td></tr>
+    <tr><td>升清（SeedVR2 / API 768P→2K 重生）</td><td>自建 GPU 机时 或 ¥0.30/秒</td><td>后端无关能力；本地 2× 两次，别一次 4×</td></tr>
+  </table></div>
+  <div class="note risk"><b>成本闸门三件事：</b>① 提交前做 <code>(预估 + 已花 + 在途冻结 ≤ 上限)</code> 原子校验，预算与单价表均可配置；② 提交时冻结预留、成功转实际、失败释放，任务记录三段成本；③ 所有生成结果留存任务日志，异常消耗可回溯到具体镜头与提示词版本。硬件门槛消失了，账单门槛必须被显式管住。</div>
+</section>
+
+<section id="s10">
+  <h2><span class="num">10 / ROADMAP</span>实施路线图</h2>
+  <p class="lead">总周期约 12–20 周（2–3 人）。节奏是<b>先自用、再开源、后生态</b>：每个阶段都要有可运行、可演示的产物，开源发布前所有核心链路必须自己先用起来。</p>
+
+  <div class="phase">
+    <div><div class="ph-title">Phase 0 · 自用验证</div><div class="ph-time">第 1–2 周</div></div>
+    <div><ul>
+      <li>本地跑通开源八步流程，产出 1 集 60 秒样片（作为 README 与演示素材）</li>
+      <li>技术对比：H3 API 与本地 ComfyUI 各生成 10 段，记录耗时、质量与真实成本</li>
+      <li>确定开源协议（MIT / Apache-2.0）、仓库结构与第三方模型分发边界</li>
+      <li>用自己真实的多集项目走一遍，列出「最不顺手」的 10 个点</li>
+    </ul><div class="accept">验收：样片 + 技术对比表 + 开源协议与仓库结构定稿</div></div>
+  </div>
+  <div class="phase">
+    <div><div class="ph-title">Phase 1 · 开源 MVP</div><div class="ph-time">第 3–8 周</div></div>
+    <div><ul>
+      <li>工作台 MVP：项目/分集/剧本/拆镜/提示词/资产/任务/成片 8 个环节</li>
+      <li>控制面：项目数据 + 任务状态机（含 cancelled）+ WebSocket 进度 + 累计成本闸门</li>
+      <li><b>四项核心壁垒进 MVP</b>：权威 H3 提示词 Schema、资产版本锁定、最小失败码表、累计成本闸门</li>
+      <li>算力适配层先实现 <code>cloud_api</code> 后端（含 cancel/capabilities/normalize_error 与 Artifact 契约）</li>
+      <li>升清抽象：API 模式走 768P→2K 重生，SeedVR2 本地超分留 P1</li>
+      <li>开源配套：README、示例剧本、Docker Compose（轻量/标准 profile）、一键环境检查、Issue 模板、贡献指南</li>
+    </ul><div class="accept">验收：无显卡 clone 后 30 分钟出 15 秒带声片段；超预算提交被阻断；构造供应商超时能归类可重试并自动重试/进死信；发布首个版本 tag</div></div>
+  </div>
+  <div class="phase">
+    <div><div class="ph-title">Phase 2 · 算力自由</div><div class="ph-time">第 9–14 周</div></div>
+    <div><ul>
+      <li>补齐 <code>local_comfyui</code> 与 <code>cloud_gpu</code> 后端，三种模式同一接口</li>
+      <li>本地 SeedVR2 升清、链式衔接、完整失败码与一键重试 UI、提示词热加载与版本链</li>
+      <li>成本看板、任务日志回溯、断点续跑</li>
+      <li>根据外部 Issue 修复文档与体验问题，补充不同硬件的运行报告</li>
+    </ul><div class="accept">验收：无显卡机器与有显卡机器都能完成同一项目；外部用户提交首批 PR</div></div>
+  </div>
+  <div class="phase">
+    <div><div class="ph-title">Phase 3 · 社区与可选生态</div><div class="ph-time">第 15–20 周</div></div>
+    <div><ul>
+      <li>社区风格包 / 模板管理，多模型路由（按镜头选 H3 / 其他模型）</li>
+      <li>可选账号与权限、开放 API、插件机制</li>
+      <li>不一定做官网；README + 演示片 + 案例页就是门面</li>
+      <li>若条件成熟，再评估托管实例、赞助与企业支持的形态</li>
+    </ul><div class="accept">验收：外部贡献者 PR ≥ 3、公开案例 ≥ 10；愿景 slogan 与能力被社区复述</div></div>
+  </div>
+  <div class="note ok"><b>并行建议：</b>样片与 README 从 Phase 0 就开始，它们既是自用需求校准器，也是开源项目的第一入口。官网与支付不进前三阶段——前期所有「对外展示」由 GitHub 仓库承担。</div>
+</section>
+
+<section id="s11">
+  <h2><span class="num">11 / TEAM &amp; BUDGET</span>团队与预算</h2>
+  <div class="grid g2">
+    <div class="card accent-blue">
+      <h4>最小团队（2–3 人，12–20 周）</h4>
+      <ul>
+        <li><b>项目负责人 / 维护者 ×1</b>：自用需求、PRD、文档、社区运营与 Issue 响应</li>
+        <li><b>全栈工程师 ×1</b>：React 工作台 + FastAPI 接口 + Compose 部署</li>
+        <li><b>AI / 算力工程师 ×1</b>：算力适配层、ComfyUI 工作流、提示词规则、超分（可兼职 0.5）</li>
+        <li>演示片与视觉：可用自己样片 + 简单剪辑，不必外包整套品牌设计</li>
+      </ul>
+    </div>
+    <div class="card accent-teal">
+      <h4>首期预算粗估（人民币，按国内二线城市团队）</h4>
+      <div class="tablewrap" style="margin-top:0"><table>
+        <tr><th>科目</th><th>区间</th></tr>
+        <tr><td>人力（2–3 人 × 3–4 个月，含社保）</td><td>¥150,000 – 300,000</td></tr>
+        <tr><td>云 GPU / 模型 API 测试与样片</td><td>¥5,000 – 20,000</td></tr>
+        <tr><td>服务器 / 对象存储 / 域名（可选，首年）</td><td>¥1,000 – 5,000</td></tr>
+        <tr><td>演示片剪辑 / 文档插图</td><td>¥2,000 – 10,000</td></tr>
+        <tr><td>开源合规与法务咨询（视情况）</td><td>¥0 – 5,000</td></tr>
+        <tr><td><b>合计</b></td><td><b>约 ¥20–40 万</b></td></tr>
+      </table></div>
+      <p class="small">若 1–2 人独立开发，可压到 ¥5–15 万，但周期可能拉长到 5–8 个月。以上为估算，非报价。</p>
+    </div>
+  </div>
+</section>
+
+<section id="s12">
+  <h2><span class="num">12 / RISK &amp; COMPLIANCE</span>风险与合规</h2>
+  <div class="tablewrap"><table>
+    <tr><th style="width:130px">风险</th><th>说明</th><th>应对</th></tr>
+    <tr><td><b>生成式 AI 备案</b></td><td>面向公众提供生成式 AI 服务需关注算法备案、生成式人工智能服务备案与 ICP 备案；自用与开源代码分发通常不等同于提供公共服务</td><td>前两期只做自用与开源分发，不运营公共生成服务；若未来上线托管实例，按规定办理备案并咨询属地主管部门</td></tr>
+    <tr><td><b>内容安全</b></td><td>使用者可能生成违规内容；开源项目虽由使用者自行负责，但示例与文档仍有引导责任</td><td>README 与示例明确禁止违法违规用途；保留提示词与任务日志；若未来托管则增加过滤、抽检与举报入口</td></tr>
+    <tr><td><b>版权与许可</b></td><td>H3 采用社区许可（非标准 Apache 2.0），与本项目开源协议不同；第三方模型权重、剧本、素材权利各自独立</td><td>发布前复核模型许可；项目自身采用 MIT / Apache-2.0；<b>不在仓库中打包模型权重</b>，只提供下载与配置指引；要求使用者保证素材权利</td></tr>
+    <tr><td><b>成本失控</b></td><td>无显卡用户依赖 API，抽卡次数失控会直接变成账单失控</td><td>提交前预估 + 预算上限 + 任务日志回溯；适配器层对每次调用设置超时与最大输出时长</td></tr>
+    <tr><td><b>模型迭代</b></td><td>视频模型半年一更，绑定单一模型会被淘汰</td><td>提示词规则、任务状态机与业务数据解耦；算力适配层抽象 provider；新模型只需新增适配器</td></tr>
+    <tr><td><b>同质化竞争</b></td><td>大厂提供免费在线工具，开源项目拼不过算力</td><td>壁垒放在垂直流程资产、硬件无关体验与社区贡献，不靠闭源授权或转售算力</td></tr>
+    <tr><td><b>开源边界不清</b></td><td>使用者误以为软件包含模型授权或商业担保，引发争议</td><td>README 明示「软件按现状提供，不承诺特定生成效果；模型/API 费用与合规责任由使用者承担；许可证仅覆盖本项目代码」</td></tr>
+  </table></div>
+  <div class="note risk"><b>务必先做：</b>确定开源协议与第三方模型分发边界，再发布仓库。这两项决策会影响 README 措辞、示例内容以及未来是否能被企业采用。</div>
+</section>
+
+<section id="s13">
+  <h2><span class="num">13 / OPEN SOURCE OPERATIONS</span>开源运营与社区冷启动</h2>
+  <p class="lead">没有获客层，增长靠的是「项目本身被用、被改、被讲出来」。传播重心从落地页转向 GitHub 仓库、演示片与真实案例。</p>
+  <div class="grid g2">
+    <div class="card accent-violet">
+      <h4>发布路径（开源项目的门面）</h4>
+      <ol>
+        <li><b>GitHub 仓库</b>：README 第一行写清愿景；截图 + 60 秒演示片 + 示例剧本 + 一键环境检查</li>
+        <li><b>可复现的安装文档</b>：分别写「无显卡走 API」与「有显卡走本地」两条最短路径</li>
+        <li><b>结构化 Issue 与贡献指南</b>：硬件配置、后端类型、错误码、复现步骤模板，降低反馈成本</li>
+        <li><b>首次发布 tag</b>：给出明确的 v0.1 能力边界与已知问题，避免预期落差</li>
+      </ol>
+    </div>
+    <div class="card accent-blue">
+      <h4>社区沉淀</h4>
+      <ul>
+        <li>B 站 5–10 分钟全流程实拍，讲「怎样从剧本做成短剧」而不是功能清单</li>
+        <li>用工作流做的成片本身就是作品广告，片尾标仓库地址</li>
+        <li>讨论区沉淀提示词模板、失败案例与不同显卡的运行报告</li>
+        <li>每周或每两周更新一次模型适配与规则集，保持仓库活跃</li>
+      </ul>
+    </div>
+    <div class="card accent-teal">
+      <h4>愿景传播口径</h4>
+      <ul>
+        <li>统一 slogan：<b>人人都能搞创作，不受硬件、算力限制</b></li>
+        <li>三个证据点：无显卡可跑、算力可切换、成本可预期</li>
+        <li>收集「老电脑 / 笔记本 / 无独显」的成功案例，它们是愿景最有说服力的证明</li>
+      </ul>
+    </div>
+    <div class="card accent-amber">
+      <h4>可选回馈（都后置）</h4>
+      <ul>
+        <li>GitHub Sponsors / 爱发电等自愿赞助</li>
+        <li>有偿技术支持与二次开发咨询</li>
+        <li>企业定制与托管实例——仅在社区规模与合规条件成熟后评估</li>
+        <li>不把商业功能从开源版里挖走；开源版应保持完整流程可用</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="s14">
+  <h2><span class="num">14 / NEXT STEP</span>下周就能开始的第一步</h2>
+  <div class="card accent-blue">
+    <ol class="steps" style="margin-top:4px">
+      <li><b>环境验证（1–2 天）</b>：ComfyUI 升到 ≥0.30.0，装 H3 节点与 pruned int8 权重；同时开通 MiniMax 开放平台 API，两条路各生成一段 10 秒 9:16 视频，对比质量、耗时与成本。</li>
+      <li><b>自用样片（3–5 天）</b>：用真实剧本跑完八步流程，产出 60 秒成片。这段片子同时是 README 素材、演示片和内部需求校准器。</li>
+      <li><b>定开源协议与仓库结构（2 天）</b>：选 MIT / Apache-2.0，定目录、示例剧本、Issue 模板与贡献指南，写清模型权重不随仓库分发。</li>
+      <li><b>架构骨架（1 周）</b>：建 Git 仓库；React + Vite + FastAPI + PostgreSQL + Redis + MinIO 的 Docker Compose 起得来；算力适配层接口与任务状态机能跑通一个假任务。</li>
+      <li><b>README 与演示片（并行）</b>：第一行写愿景「人人都能搞创作，不受硬件、算力限制」，然后给无显卡用户的最短路径。README 先于任何官网存在。</li>
+    </ol>
+  </div>
+  <div class="note ok">下一步我可以直接产出：<b>① 带算力适配层接口与表结构的开源 MVP PRD；② React + FastAPI 可运行项目骨架；③ README + 60 秒演示片脚本</b> 三选一，告诉我要哪个即可。</div>
+</section>
+
+<section id="s15">
+  <h2><span class="num">15 / CAPABILITY PLAN</span>所需 Skill 与外部能力规划</h2>
+  <p class="lead">项目完全交由助理执行时，能力分三类：<b>已内置可直接用</b>、<b>需要接入或启用</b>、<b>暂不需要</b>。当前账号状态：GitHub 与 Agent Mail 已连接；用户安装的 Skill 为 0；本地助理已连接微信 / 微信小程序，但当前会话运行时无法读取微信消息。</p>
+
+  <h3>A. 已内置、无需安装（按使用阶段）</h3>
+  <div class="tablewrap"><table>
+    <tr><th>阶段</th><th>能力（显示名）</th><th>在本项目中的用途</th></tr>
+    <tr><td>全程</td><td><b>workbuddy-docx（Word 文档创作与美化）</b> / <b>tdoc-orchestrator（文档编排）</b></td><td>PRD、README、方案文档、部署手册、交付说明</td></tr>
+    <tr><td>全程</td><td><b>workbuddy-sheetagent（表格任务统一入口）</b></td><td>成本预算、任务/数据表、版本与镜头清单</td></tr>
+    <tr><td>阶段 0–1</td><td><b>workbuddy-pdf（PDF 阅读）</b></td><td>解析参考资料、模型论文与竞品文档</td></tr>
+    <tr><td>阶段 1</td><td><b>发布为应用</b></td><td>把工作台以在线链接方式预览、演示与交付</td></tr>
+    <tr><td>阶段 1–2</td><td><b>cloud-service（云服务托管）</b></td><td>仅在托管形态启用：云数据库、对象存储、认证、免密钥模型调用</td></tr>
+    <tr><td>全程</td><td><b>recommend-connectors（连接器推荐）</b> / <b>recommend-experts（专家推荐）</b></td><td>发现外部服务与领域专家（本次盘点已使用）</td></tr>
+    <tr><td>阶段 2–3</td><td><b>skill-creator（创建 Skill）</b> / <b>expert-manager（专家包运营）</b></td><td>把提示词规则、部署流程、排障经验沉淀为项目专用能力包</td></tr>
+    <tr><td>可选</td><td><b>library（资料库）</b> / <b>tencent-docs（腾讯文档）</b> / <b>workbuddy-pptx（PPT）</b></td><td>资料归档、协作文档、阶段性汇报</td></tr>
+    <tr><td>可选</td><td><b>buddy-image-processing</b> / <b>buddy-multimodal-generation</b></td><td>截图处理与演示素材生成；核心视频仍走 H3 / ComfyUI</td></tr>
+    <tr><td>沟通</td><td><b>wecom-media-upload（企业微信素材上传）</b></td><td>在已接入的企业微信聊天中发送本地文件；不能凭空建立微信通道</td></tr>
+  </table></div>
+
+  <h3>B. 需要接入或启用</h3>
+  <div class="tablewrap"><table>
+    <tr><th>能力</th><th>当前状态</th><th>下一步动作</th><th>优先级</th></tr>
+    <tr><td><b>GitHub 连接器</b></td><td>已连接（账号 <code>lvnet</code>）</td><td>下一步：创建开源仓库、初始化 README / LICENSE / Issue 模板，并推送首个骨架</td><td><span class="tag">必需 · 已就绪</span></td></tr>
+    <tr><td><b>助理微信 / 企业微信通道</b></td><td>本地助理已连接微信 / 微信小程序；但当前会话的消息通道接口不可用，用户发送的「测试」未流进本任务</td><td>你在微信侧发起的会话需自行确认回复；本任务仍通过当前对话交付。若需我主动推送，请从微信会话中把内容转过来</td><td><span class="tag p2">已连接 · 会话隔离</span></td></tr>
+    <tr><td><b>Agent Mail</b></td><td>内置通道，已连接</td><td>作为临时异步沟通与文件交付渠道</td><td><span class="tag p1">临时可用</span></td></tr>
+    <tr><td><b>AgentEarth（AE互联）</b></td><td>已发现可用，未绑定</td><td>可选：聚合生图/生视频与多模型能力，降低对单一 API 的依赖</td><td><span class="tag p3">可选</span></td></tr>
+  </table></div>
+  <div class="note warn"><b>关于微信沟通：</b>截图确认本地助理已连接微信与微信小程序，但这是 WorkBuddy 客户端层面的连接；当前这个会话运行时读不到微信消息，也拿不到主动发送工具，所以你刚发的「测试」没有出现在我的上下文里。可行的做法是：你在微信里继续发需求，把微信侧的回复/结果贴回本任务；或后续把会话切到微信侧，由那个会话直接承接。在通道打通前，我继续通过当前对话与 Agent Mail 交付。</div>
+
+  <h3>C. 专家配置</h3>
+  <p>平台级专家包（<b>AI 短剧生产平台工程专家团</b>）的自动绑定未成功——推荐被当前会话状态取消，因此无法由我直接挂载到会话。已改为在本任务中启用两位协作专家代理：<b>架构评审专家</b>（负责三层架构、算力适配层、数据模型、任务状态机、部署方案）与 <b>AI 工作流评审专家</b>（负责八步链、H3 提示词、资产一致性、升清与失败码）。两位专家已产出评审意见，核心修正已合入本方案：</p>
+  <ul>
+    <li>八步顺序定稿为「项目 → 剧本 → 拆镜 → 参考资产 → 提示词 → 提交 → 挑片 → 精修成片」；</li>
+    <li>算力适配层补全 <code>cancel/capabilities/health/normalize_error</code> 与 Artifact 上传契约；</li>
+    <li>任务状态机 failed 回退改为 queued，补 <code>cancelled</code> 终态；</li>
+    <li>成本口径拆为预估/预留/实际三段，预算闸门做累计原子校验；</li>
+    <li>权威 H3 提示词 Schema、资产版本锁定、最小失败码表三项从 P1 上提至 MVP；</li>
+    <li>SeedVR2 抽象为后端无关的「升清」能力，无显卡也能走 API 重生。</li>
+  </ul>
+
+  <h3>D. 暂不需要</h3>
+  <ul>
+    <li><b>mini-program-development（小程序）</b>、<b>weixinpay-*（支付）</b>：前两期不做托管与收费，暂不接入</li>
+    <li><b>geo-map-compliance-guard（地图合规）</b>、<b>tencent-xmind（脑图）</b>：与本项目无关或仅可选</li>
+    <li><b>expert-manager（专家包运营）</b>：除非要把流程资产做成可分发专家包，否则放到阶段 3</li>
+  </ul>
+
+  <div class="note ok"><b>当前状态与下一步：</b>① GitHub 与 Agent Mail 可用，专家代理已加入并完成首轮评审 → ② 微信通道为客户端已连接、会话未打通，继续用当前对话/邮件交付 → ③ 接下来创建 GitHub 仓库并产出开源 MVP PRD 与项目骨架 → ④ MVP 稳定后用 skill-creator 把「项目初始化 / 提示词规则 / 部署排障」固化成项目专用 Skill。</div>
+</section>
+
+<div class="divider"></div>
+</main>
+
+<footer><div class="wrap">
+  <p>方案基于 2026-11-20 对 kfchenzhan.com.cn 及其开源仓库 qiukaihui/comfyui-auto-drama 的公开信息整理，并结合 MiniMax H3、SeedVR2 的公开技术资料。已按「前期自用、开源发布、硬件与算力无门槛」三项要求修订。价格、模型能力与合规要求均可能变化，落地前请以官方最新信息复核。</p>
+</div></footer>
+
+</body>
+</html>
