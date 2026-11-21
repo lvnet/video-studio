@@ -82,6 +82,29 @@ def check_sample_script() -> CheckResult:
     )
 
 
+def check_workbench() -> CheckResult:
+    from pathlib import Path
+    needed = ["web/index.html", "web/app.js", "web/style.css",
+              "web/api_server.py", "start.py"]
+    missing = [f for f in needed if not Path(f).exists()]
+    ok = not missing
+    return CheckResult(
+        "Web 工作台", ok,
+        "前端 + API 服务 + 启动脚本齐全" if ok else f"缺少文件：{', '.join(missing)}",
+    )
+
+
+def check_api_import() -> CheckResult:
+    import os
+    import tempfile
+    os.environ.setdefault("VS_DATA_DIR", tempfile.mkdtemp())
+    try:
+        from web.api_server import ROUTES  # noqa: F401
+        return CheckResult("API 服务可导入", True, f"{len(ROUTES)} 条路由就绪")
+    except Exception as e:
+        return CheckResult("API 服务可导入", False, f"导入失败：{e}")
+
+
 def main() -> int:
     print("=== AI 短剧工坊 · 环境自检 ===\n")
     checks = [
@@ -91,6 +114,8 @@ def main() -> int:
         check_package("video_studio", "video_studio 包"),
         check_ffmpeg(),
         check_sample_script(),
+        check_workbench(),
+        check_api_import(),
     ]
     for c in checks:
         flag = "✓" if c.ok else ("✗" if c.required else "!")

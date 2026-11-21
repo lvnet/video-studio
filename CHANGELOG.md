@@ -10,6 +10,8 @@
 - **文档**：新增 ARCHITECTURE.md，明确 LocalStore 单机边界（无事务/无并发锁）与迁移 PostgreSQL 路径、合规与算力边界。
 
 ### Added
+- **本地 Web 工作台**：零第三方依赖的单页工作台（`python start.py` 一条命令启动）。后端 `web/api_server.py`（标准库 http.server，27 条 API 路由），前端纯 HTML/CSS/JS、离线可用。八步环节可视化操作（剧本拆镜/提示词扩写/资产批准/任务提交派单/成片装配），含成本闸门、合规审计控制页。一键载入原创示例；任务与算力均为桩，不产生真实费用。
+- **API 集成测试**：14 个端到端 HTTP 测试（起真实服务走完整链路），全量测试达 114 个。
 - **合规底座（红线）**：LICENSE 明确仅覆盖本项目代码；COMPLIANCE.md 写清第三方模型/素材许可边界、禁止用途、备案边界；提示词版权守卫（拒绝复刻特定画风/具名IP/真人换脸/违法用途）；素材来源声明与检查；资产入用双门槛（人工批准 + 来源合规）。
 - **核心数据模型与本地持久化**：Project/Episode/Shot/Asset/TaskAsset/Prompt/RuleSet/BackendConfig/PriceRule/TaskEvent/Task/Output/CostLedger；本地 JSON 存储（原子写）；采用版唯一真源、资产版本锁定做成代码约束。
 - **创作层**：txt/JSON/Markdown 剧本导入与自动拆镜、缺字段报告；权威 H3 三段式 + R2V 六段式提示词 Schema 引擎、`(S1)/(S2)↔voice_id` 绑定；规则集版本化与热加载；LLM 可插拔桩（外部算力后置）。

@@ -28,6 +28,9 @@ artifacts/
 # 本地凭据脚本（含 token 用法，不入库）
 push.sh
 
+# 工作台运行时数据（本地项目数据，不入库）
+workspace_data/
+
 # 第三方权利内容（硬性要求：严禁入库）
 # 模型权重 / Checkpoint / LoRA
 *.ckpt
