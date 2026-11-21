@@ -3,7 +3,7 @@
 'use strict';
 
 const state = {
-  view: 'overview',
+  view: 'script',          // 默认从「剧本 / 分集管理」起步：先建整部多集，再走八步精加工
   wfStep: 0,               // 八步流程当前步骤
   projects: [],
   projectId: '',
@@ -127,6 +127,23 @@ function setConn(on) {
 
 function curEpisode() { return state.episodes.find(e => e.id === state.episodeId) || state.episodes[0]; }
 
+// 确保有当前项目：无项目时先按表单新建，避免空 projectId 拼出非法 URL / 空字段
+async function ensureProject(form) {
+  if (state.projectId) return state.projectId;
+  const payload = {
+    name: (form?.name || '').trim() || '未命名项目',
+    aspect_ratio: form?.aspect_ratio || '9:16',
+    style_preset: form?.style_preset || 'realistic_3d',
+    budget_total: form?.budget_total || 0,
+  };
+  const r = await api('POST', '/api/projects', payload);
+  await loadBase();                       // 刷新项目下拉与 state.projects
+  state.projectId = r.project.id;
+  const sel = $('#projectSelect'); if (sel) sel.value = state.projectId;
+  toast(`已新建项目「${r.project.name}」`, 'ok');
+  return state.projectId;
+}
+
 // ---------- 视图：总览 ----------
 function viewOverview() {
   const p = state.projects.find(x => x.id === state.projectId);
@@ -158,9 +175,11 @@ function viewScript() {
     <td>${e.index}</td><td>${esc(e.title || ('第' + e.index + '集'))}</td>
     <td>${badge(e.status, e.status === '已拆镜' ? 'green' : 'amber')}</td>
     <td>${e.shot_count || 0}</td><td>${e.prompt_count || 0} / ${e.approved_count || 0}</td>
-    <td>${e.duration_target || 60}s</td></tr>`).join('');
+    <td>${e.duration_target || 60}s</td>
+    <td><button class="btn btn-sm btn-ghost act-enter-flow" data-eid="${esc(e.id)}">进入流程</button></td></tr>`).join('');
   const ep = curEpisode();
   return `
+    <div class="notice">本页负责<b>整部剧本的批量建设</b>：设定制作参数、批量生成/导入多集，生成后目录即时更新。单集的拆镜、提示词、生成等<b>逐步精加工</b>请到左侧「八步制作流程」——点击剧集行的「进入流程」即可带着该集过去。</div>
     <div class="section-title"><span class="bar"></span>本项目制作设置</div>
     <div class="card">
       <div class="inline small">
@@ -170,8 +189,8 @@ function viewScript() {
     </div>
     <div class="section-title mt"><span class="bar"></span>剧集目录（${eps.length} 集）</div>
     <div class="card"><div class="table-wrap"><table class="table">
-      <thead><tr><th>集</th><th>标题</th><th>状态</th><th>镜头</th><th>提示词/批准</th><th>目标时长</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6">${empty('▤','暂无剧集，先载入示例或新建')}</td></tr>`}</tbody>
+      <thead><tr><th>集</th><th>标题</th><th>状态</th><th>镜头</th><th>提示词/批准</th><th>目标时长</th><th>操作</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="7">${empty('▤','暂无剧集，先在下方生成或导入，或载入示例')}</td></tr>`}</tbody>
     </table></div></div>
     <div class="card mt">
       <div class="tabs">
@@ -264,6 +283,7 @@ function wfScript(ep) {
   return `
     ${stepHead(2, '剧本')}
     ${pointList(['梗概生成', '导入原稿', 'AI 改写', '版本历史', '人工确认'])}
+    <div class="notice">本步面向<b>当前选中剧集</b>做剧本精加工与版本管理。若要<b>批量新建整部多集</b>，请到左侧「剧本 / 分集管理」——那里生成后目录即时更新，不会跳转。可先在此用梗概/导入建好剧集，再逐集改写确认。</div>
     <div class="card"><div class="tabs">
       <div class="tab active" data-tab="gen">梗概生成</div>
       <div class="tab" data-tab="imp">导入原稿</div>
@@ -822,13 +842,21 @@ function bindViewEvents() {
   const btnSaveProject = $('#btnSaveProject');
   if (btnSaveProject) btnSaveProject.onclick = async () => {
     try {
-      const r = await api('POST', '/api/projects/' + encodeURIComponent(state.projectId) + '/settings', {
+      const form = {
         name: $('#prjName').value,
         aspect_ratio: $('#prjAspect').value,
         style_preset: $('#prjStyle').value,
+        budget_total: parseFloat($('#prjBudget').value) || 0,
+      };
+      // 无项目时先新建，拿到真实 id 再补骨架，杜绝 /api/projects//settings
+      const pid = await ensureProject(form);
+      const r = await api('POST', '/api/projects/' + encodeURIComponent(pid) + '/settings', {
+        name: form.name,
+        aspect_ratio: form.aspect_ratio,
+        style_preset: form.style_preset,
         episode_count: parseInt($('#prjEpCount').value) || 0,
         duration_target: parseInt($('#prjDuration').value) || 60,
-        budget_total: parseFloat($('#prjBudget').value) || 0,
+        budget_total: form.budget_total,
       });
       toast(`已保存：补齐 ${r.created_episodes} 集骨架`, 'ok');
       await loadBase(); await refresh();
@@ -839,8 +867,9 @@ function bindViewEvents() {
   const btnGenOutline = $('#btnGenOutline');
   if (btnGenOutline) btnGenOutline.onclick = async () => {
     try {
+      const pid = await ensureProject();
       const r = await api('POST', '/api/script/generate-outline', {
-        project_id: state.projectId,
+        project_id: pid,
         synopsis: $('#genSynopsis').value || '原创短剧梗概',
         episodes: parseInt($('#genEpisodes').value) || 1,
         duration_target: parseInt($('#genDuration').value) || 60,
@@ -852,8 +881,9 @@ function bindViewEvents() {
   const btnImportBook = $('#btnImportBook');
   if (btnImportBook) btnImportBook.onclick = async () => {
     try {
+      const pid = await ensureProject();
       const r = await api('POST', '/api/script/import-book', {
-        project_id: state.projectId, text: $('#impBook').value,
+        project_id: pid, text: $('#impBook').value,
       });
       if (!r.chapters) throw new Error('剧本文本为空');
       toast(`已导入并分集：${r.chapters} 集`, 'ok'); await refresh();
@@ -933,25 +963,47 @@ function bindViewEvents() {
   });
   content().querySelectorAll('.act-goto-assets').forEach(el => el.onclick = () => { state.view='assetlib'; render().catch(e=>toast(e.message,'err')); });
 
-  // 剧集行点击
-  content().querySelectorAll('.ep-row').forEach(el => el.onclick = () => {
-    state.episodeId = el.dataset.eid; state.wfStep = 0;
+  // 剧集行点击：选中该集（停留在当前视图）
+  content().querySelectorAll('.ep-row').forEach(el => el.onclick = (ev) => {
+    if (ev.target.closest('.act-enter-flow')) return;  // 按钮单独处理
+    state.episodeId = el.dataset.eid;
+    render().catch(e => toast(e.message, 'err'));
+  });
+  // 「进入流程」：带该集跳到八步制作流程的剧本步骤做精加工（显式入口，非默认跳转）
+  content().querySelectorAll('.act-enter-flow').forEach(el => el.onclick = (ev) => {
+    ev.stopPropagation();
+    state.episodeId = el.dataset.eid;
+    state.view = 'workflow'; state.wfStep = 1;
     render().catch(e => toast(e.message, 'err'));
   });
 
   // 剧本管理 tabs（ai / import）
   if (state.view === 'script') bindGroupTabs('ai');
+  // 批量生成多集：本页原地完成，不再跳转到八步流程（职责边界见 wfScript 顶部说明）
   const btnGen = $('#btnGenEpisodes');
-  if (btnGen) btnGen.onclick = () => {
-    state.view = 'workflow'; state.wfStep = 1;
-    render().catch(e => toast(e.message, 'err'));
+  if (btnGen) btnGen.onclick = async () => {
+    const idea = ($('#storyIdea')?.value || '').trim();
+    if (!idea) { toast('请先输入故事梗概', 'err'); return; }
+    if (!$('#epCount').value || parseInt($('#epCount').value) < 1) { toast('集数至少为 1', 'err'); return; }
+    try {
+      const pid = await ensureProject();
+      const r = await api('POST', '/api/script/generate-outline', {
+        project_id: pid,
+        synopsis: idea,
+        episodes: parseInt($('#epCount').value) || 1,
+        duration_target: parseInt($('#epDuration').value) || 60,
+      });
+      toast(`已在本页生成 ${r.episodes.length} 集并写入剧集目录`, 'ok');
+      await refresh();
+    } catch (e) { toast(e.message, 'err'); }
   };
   const btnImportFull = $('#btnImportFull');
   if (btnImportFull) btnImportFull.onclick = async () => {
     const text = ($('#fullScript')?.value || '').trim();
     if (!text) { toast('请先粘贴整部剧本', 'err'); return; }
     try {
-      const r = await api('POST', '/api/script/import-book', { project_id: state.projectId, text });
+      const pid = await ensureProject();
+      const r = await api('POST', '/api/script/import-book', { project_id: pid, text });
       toast(`已导入并分集：${r.chapters} 集`, 'ok'); await refresh();
     } catch (e) { toast(e.message, 'err'); }
   };

@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Fixed（工作台交互规划）
+- **工作台默认起点改为「剧本 / 分集管理」**：打开即进入整部剧本的批量建设入口，先建多集再走八步精加工，符合制作顺序；导航高亮同步。
+- **厘清「剧本/分集管理」与「八步制作流程」职责边界**：修复剧本管理页「AI 新建多集剧本」错误跳转到八步流程剧本步骤的问题——批量生成/导入多集改为在本页原地完成并即时刷新剧集目录；剧集目录新增「进入流程」显式入口，带指定剧集跳到八步流程做单集精加工。两页均加职责说明文案。
+- **补齐无项目兜底**：新增前端 `ensureProject()`，首次使用（零项目）时任何"生成/导入/保存设置"操作都会先自动创建项目拿到真实 id，杜绝 `/api/projects//settings` 的"未知接口"与空 `project_id` 的"缺少必填字段"报错。
+- 新增 `FreshProjectBootstrapTest` 回归测试固化上述从零链路；全套 168 测试通过。
+
 ### Added（算力接口做实）
 - **三种算力后端接口全部做实，默认内存桩、零外连、零成本、零版权风险**：
   - **ComfyUI 全套 HTTP API**：`/system_stats`（健康）、`/object_info`（能力发现）、`POST /prompt`（提交 workflow graph）、`/queue`、`/history/{id}`（轮询）、`/view`（产物字节 + 落盘 + sha256）、`POST /upload/image`（multipart 参考图）、`/interrupt`（取消）。新增 `comfyui_workflow.build_workflow()`，节点类型仅默认模板、可用 `payload['workflow']` 覆盖，不硬编码/不下载模型权重。

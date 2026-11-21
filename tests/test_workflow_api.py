@@ -200,5 +200,79 @@ class WorkflowApiTest(unittest.TestCase):
         self.assertEqual(d2["record"]["name"], "测试精修成片")
 
 
+class FreshProjectBootstrapTest(unittest.TestCase):
+    """回归：工作台首次使用（零项目）时，从新建项目到生成多集的兜底链路。
+
+    对应用户反馈：剧本管理页「AI 新建多集剧本」曾错误跳转到八步流程，
+    且无项目时空 projectId 触发「未知接口 / 缺少 project_id」。
+    前端 ensureProject() 先建项目再调用下列接口，此测试固化后端契约。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls._old_data_dir = os.environ.get("VS_DATA_DIR")
+        cls._tmp = tempfile.TemporaryDirectory()
+        os.environ["VS_DATA_DIR"] = cls._tmp.name
+        import web.api_server as api
+        api.STATE = None            # 强制重建 AppState，指向本类独立数据目录
+        from http.server import ThreadingHTTPServer
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), api.Handler)
+        cls.port = cls.server.server_address[1]
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.base = f"http://127.0.0.1:{cls.port}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls._tmp.cleanup()
+        import web.api_server as api
+        api.STATE = None            # 避免影响后续测试类
+        if cls._old_data_dir is None:
+            os.environ.pop("VS_DATA_DIR", None)
+        else:
+            os.environ["VS_DATA_DIR"] = cls._old_data_dir
+
+    def req(self, method, path, body=None):
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        headers = {"Content-Type": "application/json"} if data else {}
+        r = urllib.request.Request(self.base + path, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(r, timeout=10) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read().decode("utf-8"))
+
+    def test_fresh_bootstrap_no_redirect_needed(self):
+        # ensureProject：无论当前是否已有项目，都能新建一个项目拿到真实 id
+        s, before = self.req("GET", "/api/projects")
+        self.assertEqual(s, 200)
+        s, d = self.req("POST", "/api/projects", {"name": "从零开始"})
+        self.assertEqual(s, 200)
+        pid = d["project"]["id"]
+        s, after = self.req("GET", "/api/projects")
+        self.assertEqual(len(after["projects"]), len(before["projects"]) + 1)
+        # 第1步设置补骨架
+        s, d = self.req("POST", f"/api/projects/{pid}/settings", {"episode_count": 3})
+        self.assertEqual(s, 200)
+        self.assertEqual(d["created_episodes"], 3)
+        # 剧本管理页原地生成多集（核心：不再跳转，直接带真实 pid 调用）
+        s, d = self.req("POST", "/api/script/generate-outline",
+                        {"project_id": pid, "synopsis": "原创梗概", "episodes": 2})
+        self.assertEqual(s, 200)
+        self.assertEqual(len(d["episodes"]), 2)
+        # 整本导入同样可用
+        s, d = self.req("POST", "/api/script/import-book",
+                        {"project_id": pid, "text": "第一集 初遇\n场景：江边\nA：你好。"})
+        self.assertEqual(s, 200)
+        self.assertGreaterEqual(d["chapters"], 1)
+        # 空 project_id 仍被后端明确拒绝（前端已兜底，属防御性契约）
+        s, d = self.req("POST", "/api/script/generate-outline",
+                        {"project_id": "", "synopsis": "x"})
+        self.assertEqual(s, 400)
+        self.assertIn("project_id", d["error"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
