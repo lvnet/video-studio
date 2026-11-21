@@ -229,6 +229,96 @@ class EpisodeEditApiTest(unittest.TestCase):
         self.assertEqual(task[0], 200)
         self.assertTrue(task[1].get("task") or task[1].get("task_id"))
 
+    def test_07_import_titles_are_clean(self):
+        """导入后每集标题必须是干净的『第N集 · 短副标题』，序号连续。"""
+        # 场景1：标题行后跟一大段正文（乱标题来源）
+        # 场景2：原稿自带乱序号（第94集/第8集），导入后应按出现顺序重排为 1/2
+        # 场景3：章回体「第X章」也应识别
+        text = (
+            "第94集 就全部知道真相了原来这一切都是早就安排好的阴谋胜天半子\n"
+            "场景：江边\n林远：你好。\n\n"
+            "第8集 告别\n场景：车站\n苏晚：走了。\n\n"
+            "第三章 重逢\n场景：机场\nA：好久不见。"
+        )
+        s, d = self._req("POST", "/api/script/import-book", {
+            "project_id": self.pid, "text": text,
+        })
+        self.assertEqual(s, 200)
+        self.assertEqual(d["chapters"], 3)
+        eps = self._eps()
+        # 目录序号连续
+        self.assertEqual([e["index"] for e in eps], [1, 2, 3])
+        # 标题里的集号也必须是连续的 1/2/3，不能照搬 94/8/3
+        for e in eps:
+            self.assertTrue(e["title"].startswith(f"第{e['index']}集"), e["title"])
+        # 大段正文没有混进标题
+        self.assertFalse(any("全部知道真相" in e["title"] for e in eps))
+        # 标题长度受控
+        self.assertTrue(all(len(e["title"]) <= 22 for e in eps))
+        # 第1集从正文场景行兜底提取了副标题（江边）
+        self.assertIn("江边", eps[0]["title"])
+
+    def test_08_real_messy_script_titles(self):
+        """真实剧本截图案例：行首集号后跟整段正文，标题不得塞入正文句子。"""
+        text = (
+            "第1集\n"
+            "第一集就全部知道真相，只有男主不知道，于是男主每集表白一次，观众就拆一分火葬场\n"
+            "第2集：债总你认错人了，勺子掉到这平台上很平，冷冷地盯着苏晚\n"
+            "第3集：第七小节是情感点，为后期的反转铺垫，曼悉和徐冬的对话\n"
+            "第4集出现。\n"
+            "第5集佟生滑倒，因为它的左轮不同\n"
+            "第6集他终于明白，因为所有人都知道，那个人其实就在他身边。"
+        )
+        s, d = self._req("POST", "/api/script/import-book", {
+            "project_id": self.pid, "text": text,
+        })
+        self.assertEqual(s, 200)
+        eps = self._eps()
+        # 每个标题都以连续「第N集」开头，长度受控，不含大段正文
+        for e in eps:
+            self.assertTrue(e["title"].startswith(f"第{e['index']}集"), e["title"])
+            self.assertLessEqual(len(e["title"]), 20, e["title"])
+        joined = " ".join(e["title"] for e in eps)
+        self.assertNotIn("全部知道真相", joined)
+        self.assertNotIn("就在他身边", joined)
+        self.assertNotIn("情感点", joined)
+
+    def test_09_markdown_creation_doc_dedupe(self):
+        """规范创作案：策划案引用 + 大纲(####) + 完整剧本(###) 同集号去重。"""
+        # 模拟真实创作案结构：策划案里的「第一集就…」引用不应成集；
+        # 大纲与完整剧本同集号各出现一次，应保留正文更完整的版本。
+        text = (
+            "# 《测试短剧》\n\n"
+            "## PART 01｜选题策划\n"
+            "观众第一集就全部知道真相，只有男主不知道。第48集是最终反转。\n\n"
+            "## PART 05｜分集大纲\n"
+            "#### 第 01 集｜婚礼\n"
+            "- 核心事件：开场。\n"
+            "#### 第 02 集｜右手在抖\n"
+            "- 核心事件：救人。\n\n"
+            "## PART 06｜逐集完整剧本\n"
+            "### 第 01 集 ｜ 第一幕 · 错：一场认错人的婚礼\n"
+            "\n".join([f"#### 场景 {i}　夜 / 宴会厅\n苏晚端着酒盘站在角落，看着傅斯年把戒指戴在别人手上。" for i in range(1, 6)]) + "\n\n"
+            "### 第 02 集 ｜ 第一幕 · 错：她的右手在抖\n"
+            "\n".join([f"#### 场景 {i}　日 / 医院\n苏晚报出一串专业术语，傅斯年皱眉看她。" for i in range(1, 6)])
+        )
+        s, d = self._req("POST", "/api/script/import-book", {
+            "project_id": self.pid, "text": text,
+        })
+        self.assertEqual(s, 200)
+        # 2 集，不是 4 集（大纲+剧本各2），也不是被策划案引用切出的更多集
+        self.assertEqual(d["chapters"], 2)
+        eps = self._eps()
+        self.assertEqual([e["index"] for e in eps], [1, 2])
+        # 标题副标题取自完整剧本版（「一场认错人的婚礼」）而非大纲版（「婚礼」），
+        # 这本身就证明同集号去重时保留了正文更完整的版本。
+        self.assertIn("一场认错人的婚礼", eps[0]["title"])
+        self.assertIn("她的右手在抖", eps[1]["title"])
+        # 策划案引用没有混进任何标题
+        joined = " ".join(e["title"] for e in eps)
+        self.assertNotIn("全部知道真相", joined)
+        self.assertNotIn("反转", joined)
+
 
 if __name__ == "__main__":
     unittest.main()

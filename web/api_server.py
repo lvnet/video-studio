@@ -1179,7 +1179,17 @@ def h_script_generate_outline(handler, m, body, q):
             "note": "LLM 为本地桩：按梗概生成原创大纲，不调用外部算力。"}
 
 
-_EP_TITLE_RE = re.compile(r"^第\s*([0-9零一二三四五六七八九十百千]+)\s*集")
+_EP_TITLE_RE = re.compile(r"^第\s*([0-9零一二三四五六七八九十百千]+)\s*[集章回]")
+# Markdown 标题形式的集标题，如「### 第 01 集 ｜ 第一幕 · 错：一场认错人的婚礼」
+# 这是规范创作案里真正的分集边界，优先于正文里出现的「第X集」引用。
+_MD_EP_RE = re.compile(r"^\s*#{1,6}\s+第\s*([0-9零一二三四五六七八九十百千]+)\s*集\b(.*)$")
+
+# 副标题里这些开头词说明是正文叙述被误当标题，不是真正的集名
+_TITLE_NARRATION_STARTS = (
+    "就", "才", "便", "已经", "终于", "原来", "这时", "此时", "突然", "忽然",
+    "然而", "但是", "于是", "接着", "随后", "只见", "却", "可", "连", "把", "被",
+)
+_SCENE_LINE_RE = re.compile(r"^\s*(场景|地点|地点：|场景：|内景|外景|INT\.|EXT\.)")
 
 
 def _cn_to_int(s: str) -> int | None:
@@ -1206,41 +1216,118 @@ def _cn_to_int(s: str) -> int | None:
     return section + number
 
 
-def _split_episodes(text: str) -> list[dict]:
-    """按「行首独立成行的 第X集」标题切分整部剧本。
+def _clean_subtitle(rest: str, body_lines: list[str], num: int) -> str:
+    """从标题行剩余文字里提炼一个干净的短副标题。
 
-    只把独占一行的「第X集 …」当作新集起点；正文中间出现的"第X集"字样
-    一律保留在正文里，避免误切导致集序号与标题错乱。返回按出现顺序排列、
-    index 连续（1..n）的分集列表。
+    常见的"乱标题"来源：把整句正文当集名（"第1集 就全部知道真相了原来…"），
+    或是"第一集就全部知道真相"这种叙述开头。这里做过滤与兜底：
+    - 太长、含对白/场景标记、叙述词开头的，一律丢弃；
+    - 丢弃后从正文首行的「场景：」里提取地点作为副标题；
+    - 都没有就留空（标题只显示「第N集」）。
+    """
+    rest = (rest or "").strip(" :：·-—·、,，。.!！?？")
+    usable = ""
+    # 真正的集名是短词（如「闪婚三年」「总裁的白月光」），不含句读标点；
+    # 带逗号/句号/冒号的基本都是正文叙述，一律不进标题。
+    _punct = "，。！？,、;；：:"
+    if rest and len(rest) <= 12 and not rest.startswith(_TITLE_NARRATION_STARTS) \
+            and not any(c in rest for c in _punct):
+        usable = rest
+    if not usable:
+        for ln in body_lines:
+            s = ln.strip()
+            if not s:
+                continue
+            m = _SCENE_LINE_RE.match(s)
+            if m:
+                loc = re.sub(r"^\s*(场景|地点)\s*[:：]\s*", "", s).strip(" 。.")
+                if loc and len(loc) <= 16:
+                    usable = loc
+            break  # 只看第一处非空行，通常是场景行
+    return usable[:16]
+
+
+def _md_episode_subtitle(tail: str) -> str:
+    """从 Markdown 集标题的剩余文字里提取副标题。
+
+    形如「｜ 第一幕 · 错：一场认错人的婚礼」「：她的右手在抖」。
+    优先取全角/半角竖线或冒号后的最后一段（真正的集名），去掉幕标记前缀。
+    """
+    s = (tail or "").strip()
+    # 用竖线或冒号切，取最后一段（最贴近集名）
+    for sep in ("｜", "|", "：", ":"):
+        if sep in s:
+            s = s.split(sep)[-1].strip()
+    # 去掉「第一幕 · 错」这类幕/阶段前缀残留
+    s = re.sub(r"^.*?[·、]\s*", "", s).strip()
+    s = s.strip(" *—-")
+    return s[:20]
+
+
+def _split_episodes(text: str) -> list[dict]:
+    """把整部剧本切分成集，每集 {index, title, text}。
+
+    两级策略：
+    1. 若文本含 ≥2 个 Markdown 集标题（如「### 第 01 集 ｜ …」），判定为规范
+       创作案，只按这些标题分集。策划案/大纲/金句库里出现的「第一集…」引用
+       不在标题行上，不会被误切成集——这正是修复"90集乱码标题"的关键。
+    2. 否则回退到纯文本策略：只把行首独立的「第X集/章/回」当标题。
+
+    两种策略都强制标题集号按出现顺序连续编号（1..n），且不把大段正文塞进标题。
     """
     lines = text.splitlines()
-    cuts: list[tuple[int, int, str]] = []  # (行号, 集号, 标题)
+
+    # ---- 策略 1：Markdown 标题优先 ----
+    md_cuts: list[tuple[int, int, str]] = []  # (行号, 集号, 副标题)
+    for i, line in enumerate(lines):
+        m = _MD_EP_RE.match(line)
+        if not m:
+            continue
+        num = _cn_to_int(m.group(1))
+        subtitle = _md_episode_subtitle(m.group(2) or "")
+        md_cuts.append((i, num or (len(md_cuts) + 1), subtitle))
+    if len(md_cuts) >= 2:
+        # 同一部创作案常同时含「分集大纲」与「逐集完整剧本」，同一个集号会出现
+        # 两次。按集号分组，保留正文最完整的那个版本（完整剧本远长于大纲）。
+        best: dict[int, dict] = {}
+        for k, (line_no, num, subtitle) in enumerate(md_cuts):
+            end = md_cuts[k + 1][0] if k + 1 < len(md_cuts) else len(lines)
+            body = "\n".join(lines[line_no + 1:end]).strip()
+            key = num or (k + 1)
+            prev = best.get(key)
+            if prev is None or len(body) > len(prev["text"]):
+                best[key] = {"num": key, "title": subtitle, "text": body}
+        ordered = sorted(best.values(), key=lambda d: d["num"])
+        result: list[dict] = []
+        for k, item in enumerate(ordered):
+            subtitle = item["title"]
+            title = f"第{k + 1}集" + (f" · {subtitle}" if subtitle else "")
+            result.append({"index": k + 1, "title": title, "text": item["text"]})
+        return result
+
+    # ---- 策略 2：纯文本行首标题（回退） ----
+    cuts: list[tuple[int, int]] = []  # (行号, 集号)
+    rest_by_line: dict[int, str] = {}
     for i, line in enumerate(lines):
         stripped = line.strip()
         mm = _EP_TITLE_RE.match(stripped)
         if not mm:
             continue
-        # 标题行：去掉集号后剩余作为副标题（可能为空），限制长度
-        rest = stripped[mm.end():].strip(" :：·-—")
         num = _cn_to_int(mm.group(1))
-        title = f"第{num}集" if num else f"第{stripped[mm.start():mm.end()].strip()}集"
-        if rest:
-            title += " " + rest[:30]
-        cuts.append((i, num or (len(cuts) + 1), title))
-
+        cuts.append((i, num or (len(cuts) + 1)))
+        rest_by_line[i] = stripped[mm.end():].strip(" :：·-—")
     if not cuts:
         return []
 
-    # 未匹配到标题的前置内容并入第一集
-    result: list[dict] = []
-    for k, (line_no, num, title) in enumerate(cuts):
+    result = []
+    for k, (line_no, num) in enumerate(cuts):
         end = cuts[k + 1][0] if k + 1 < len(cuts) else len(lines)
-        start = line_no if k == 0 else line_no
-        body_lines = lines[start:end]
-        # 第一集把标题行之前的引言也带上
+        body_lines = lines[line_no + 1:end]
         if k == 0 and line_no > 0:
-            body_lines = lines[0:end]
+            body_lines = lines[0:line_no] + body_lines
         body = "\n".join(body_lines).strip()
+        subtitle = _clean_subtitle(rest_by_line.get(line_no, ""), body_lines, num)
+        title = f"第{k + 1}集" + (f" · {subtitle}" if subtitle else "")
         result.append({"index": k + 1, "title": title, "text": body})
     return result
 
