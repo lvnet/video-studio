@@ -61,11 +61,22 @@ class FailureCode(str, Enum):
 
 
 @dataclass
-class Task:
+class GenRequest:
+    """算力层的一次生成请求。
+
+    注意与 models.Task（持久化的任务实体）区分：GenRequest 是「发给后端的请求」，
+    Task 是「控制面跟踪的任务记录」。历史上本类曾命名为 Task，保留别名兼容。
+    """
+
     task_id: str
     step: str
     payload: dict[str, Any]
     budget_limit: float | None = None
+
+
+# 向后兼容别名：老代码 from .base import Task 仍可用（指向 GenRequest）。
+# 新代码请用 GenRequest，避免与 models.Task 混淆。
+Task = GenRequest
 
 
 class Backend(ABC):
@@ -85,11 +96,11 @@ class Backend(ABC):
         """健康检查。"""
 
     @abstractmethod
-    def estimate(self, task: Task) -> Cost:
+    def estimate(self, task: GenRequest) -> Cost:
         """提交前成本预估。"""
 
     @abstractmethod
-    def submit(self, task: Task) -> str:
+    def submit(self, task: GenRequest) -> str:
         """提交任务，返回 task_id。"""
 
     @abstractmethod

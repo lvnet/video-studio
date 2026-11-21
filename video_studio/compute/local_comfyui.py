@@ -15,7 +15,7 @@ from .base import (
     Cost,
     FailureCode,
     Progress,
-    Task,
+    GenRequest,
 )
 
 
@@ -36,11 +36,11 @@ class LocalComfyUIBackend(Backend):
         # TODO: GET /system_stats
         return False
 
-    def estimate(self, task: Task) -> Cost:
+    def estimate(self, task: GenRequest) -> Cost:
         # 本地算力：按预计耗时折算，无直接现金成本
         return Cost(estimated=0.0, currency="CNY", breakdown={"mode": "local"})
 
-    def submit(self, task: Task) -> str:
+    def submit(self, task: GenRequest) -> str:
         # TODO: POST /prompt，拿到 prompt_id
         task_id = hashlib.sha1(
             ("local" + str(task.payload)).encode("utf-8")

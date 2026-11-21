@@ -12,7 +12,7 @@ from .base import (
     Cost,
     FailureCode,
     Progress,
-    Task,
+    GenRequest,
 )
 
 
@@ -39,11 +39,11 @@ class CloudApiBackend(Backend):
         # TODO: 真实健康检查（轻量探活接口）
         return bool(self.api_key)
 
-    def estimate(self, task: Task) -> Cost:
+    def estimate(self, task: GenRequest) -> Cost:
         # TODO: 接入真实计价（按 token / 秒数 / 分辨率）
         return Cost(estimated=0.0, breakdown={"model": self.model})
 
-    def submit(self, task: Task) -> str:
+    def submit(self, task: GenRequest) -> str:
         # TODO: 构造请求并 POST 到 self.endpoint，返回远端 task_id
         task_id = hashlib.sha1(
             (task.step + str(task.payload)).encode("utf-8")
