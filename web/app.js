@@ -172,11 +172,16 @@ function viewOverview() {
 function viewScript() {
   const eps = state.episodes;
   const rows = eps.map(e => `<tr class="ep-row ${e.id === state.episodeId ? 'ep-active' : ''}" data-eid="${esc(e.id)}" style="cursor:pointer">
-    <td>${e.index}</td><td>${esc(e.title || ('第' + e.index + '集'))}</td>
+    <td>${e.index}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-sm btn-ghost act-del-ep" data-eid="${esc(e.id)}" title="删除该集">删除</button>
+      <button class="btn btn-sm btn-ghost act-edit-ep" data-eid="${esc(e.id)}" title="修改集序号 / 标题 / 时长">编辑</button>
+      <button class="btn btn-sm btn-ghost act-enter-flow" data-eid="${esc(e.id)}">进入流程</button>
+    </td>
+    <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.title || ('第' + e.index + '集'))}">${esc(e.title || ('第' + e.index + '集'))}</td>
     <td>${badge(e.status, e.status === '已拆镜' ? 'green' : 'amber')}</td>
     <td>${e.shot_count || 0}</td><td>${e.prompt_count || 0} / ${e.approved_count || 0}</td>
-    <td>${e.duration_target || 60}s</td>
-    <td><button class="btn btn-sm btn-ghost act-enter-flow" data-eid="${esc(e.id)}">进入流程</button></td></tr>`).join('');
+    <td>${e.duration_target || 60}s</td></tr>`).join('');
   const ep = curEpisode();
   return `
     <div class="notice">本页负责<b>整部剧本的批量建设</b>：设定制作参数、批量生成/导入多集，生成后目录即时更新。单集的拆镜、提示词、生成等<b>逐步精加工</b>请到左侧「八步制作流程」——点击剧集行的「进入流程」即可带着该集过去。</div>
@@ -186,10 +191,16 @@ function viewScript() {
         ${badge('横版 1920×1080', 'blue')}${badge('写实风格', 'gray')}
         <span class="spacer"></span><span class="muted">预算 ¥${state.projects.find(p=>p.id===state.projectId)?.budget_total || 0}</span>
       </div>
+      <div class="field-row mt">
+        <div class="field" style="max-width:180px"><label>总集数</label><input id="scriptEpCount" class="input" type="number" min="1" value="${eps.length||1}"></div>
+        <div class="field" style="max-width:180px"><label>单集时长（秒）</label><input id="scriptEpDuration" class="input" type="number" min="10" value="60"></div>
+        <div class="field" style="align-self:flex-end"><button class="btn btn-green" id="btnApplyEpCount">应用集数</button></div>
+      </div>
+      <div class="muted small mt">调小集数会移除末尾多余的集及其下游数据；调大则补齐剧集骨架。也可在下方目录逐集编辑 / 删除。</div>
     </div>
     <div class="section-title mt"><span class="bar"></span>剧集目录（${eps.length} 集）</div>
     <div class="card"><div class="table-wrap"><table class="table">
-      <thead><tr><th>集</th><th>标题</th><th>状态</th><th>镜头</th><th>提示词/批准</th><th>目标时长</th><th>操作</th></tr></thead>
+      <thead><tr><th>集</th><th>操作</th><th>标题</th><th>状态</th><th>镜头</th><th>提示词/批准</th><th>目标时长</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="7">${empty('▤','暂无剧集，先在下方生成或导入，或载入示例')}</td></tr>`}</tbody>
     </table></div></div>
     <div class="card mt">
@@ -198,7 +209,7 @@ function viewScript() {
         <div class="tab" data-tab="import">导入整部剧本</div>
       </div>
       <div id="tab-ai">
-        <p class="small muted">输入故事梗概，规划集数，逐集生成正文并自动保存到左侧分集目录。此为桩：生成逻辑由本地规则演示，真实 LLM 后置。</p>
+        <p class="small muted">输入故事梗概，规划集数，本地叙事引擎按起承转合生成结构化分集正文（含场景/动作/对白）并写入分集目录，可直接拆镜。全程原创、零版权风险、不调用外部算力。</p>
         <div class="field"><textarea id="storyIdea" class="textarea" placeholder="输入故事梗概…（示例：一个旅人十年后回到江边码头，寻找失散的故人）"></textarea></div>
         <div class="field-row mt">
           <div class="field" style="max-width:160px"><label>生成 / 续写集数</label><input id="epCount" class="input" type="number" value="1" min="1"></div>
@@ -208,9 +219,10 @@ function viewScript() {
           <span class="muted small">续写方向可留空，按已有剧本承接。当前选中：${esc(ep ? ep.title : '无')}</span></div>
       </div>
       <div id="tab-import" class="hidden">
-        <p class="small muted">整剧本自动按节 / 章 / 集分集。每一行场景自动拆为镜头。支持 TXT / Markdown。</p>
+        <p class="small muted">整剧本自动按节 / 章 / 集分集。每行场景自动拆为镜头，支持 TXT / Markdown。<b>重新导入会覆盖现有剧集</b>（旧集及其镜头/提示词一并清理），不会累加；如需在原剧集后追加可勾选下方选项。</p>
         <div class="field"><textarea id="fullScript" class="textarea" placeholder="粘贴整部剧本…"></textarea></div>
-        <button class="btn mt" id="btnImportFull">导入并自动分集</button>
+        <label class="small muted mt" style="display:inline-flex;align-items:center;gap:6px"><input id="importAppend" type="checkbox"> 追加到现有剧集末尾（不覆盖）</label>
+        <div><button class="btn mt" id="btnImportFull">导入并自动分集</button></div>
       </div>
     </div>`;
 }
@@ -239,7 +251,9 @@ function wfProject(ep) {
   const p = state.projects.find(x => x.id === state.projectId) || {};
   const eps = state.episodes;
   const epsRows = eps.map(e => `<tr><td>${e.index}</td><td>${esc(e.title || ('第'+e.index+'集'))}</td>
-    <td>${e.duration_target || 60}s</td><td>${badge(e.status||'待制作', e.status==='已拆镜'?'green':'amber')}</td></tr>`).join('');
+    <td>${e.duration_target || 60}s</td><td>${badge(e.status||'待制作', e.status==='已拆镜'?'green':'amber')}</td>
+    <td style="white-space:nowrap"><button class="btn btn-sm btn-ghost act-edit-ep" data-eid="${esc(e.id)}" title="修改集序号 / 标题 / 时长">编辑</button>
+      <button class="btn btn-sm btn-ghost act-del-ep" data-eid="${esc(e.id)}" title="删除该集">删除</button></td></tr>`).join('');
   return `
     ${stepHead(1, '创建项目')}
     ${pointList(['新建项目', '制作设置', '生成剧集骨架'])}
@@ -261,11 +275,11 @@ function wfProject(ep) {
         <div class="field"><label>总预算（¥）</label><input id="prjBudget" class="input" type="number" value="${p.budget_total||0}"></div>
       </div>
       <div class="inline mt"><button class="btn btn-green" id="btnSaveProject">保存设置并生成骨架</button>
-        <span class="muted small">已有剧集保持不变，仅补齐缺少的集数。</span></div>
+        <span class="muted small">集数可增可减：调小会移除末尾多余的集，调大补齐骨架；也可在下方逐集编辑 / 删除。</span></div>
     </div>
     <div class="card mt"><div class="card-title">剧集骨架（${eps.length} 集）</div>
-      <div class="table-wrap"><table class="table"><thead><tr><th>集</th><th>标题</th><th>时长</th><th>状态</th></tr></thead>
-      <tbody>${epsRows || `<tr><td colspan="4">${empty('▤','暂无剧集')}</td></tr>`}</tbody></table></div>
+      <div class="table-wrap"><table class="table"><thead><tr><th>集</th><th>标题</th><th>时长</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>${epsRows || `<tr><td colspan="5">${empty('▤','暂无剧集')}</td></tr>`}</tbody></table></div>
     </div>`;
 }
 
@@ -290,7 +304,7 @@ function wfScript(ep) {
       <div class="tab" data-tab="rw">AI 改写</div>
     </div>
       <div id="tab-gen">
-        <p class="small muted">输入原创梗概，LLM 桩按集生成大纲并保存版本链；真实 LLM 后置。全程原创、合规守卫前置。</p>
+        <p class="small muted">输入原创梗概，本地叙事引擎按起承转合生成每集结构化正文（场景/动作/对白/钩子）并保存版本链，生成后即可到「拆镜」步骤拆成分镜。全程原创、合规守卫前置、不调用外部算力。</p>
         <div class="field"><textarea id="genSynopsis" class="textarea" placeholder="输入故事梗概…"></textarea></div>
         <div class="field-row mt">
           <div class="field" style="max-width:150px"><label>生成集数</label><input id="genEpisodes" class="input" type="number" value="1" min="1"></div>
@@ -299,9 +313,10 @@ function wfScript(ep) {
         <div class="inline mt"><button class="btn" id="btnGenOutline">生成分集大纲</button></div>
       </div>
       <div id="tab-imp" class="hidden">
-        <p class="small muted">粘贴整部原稿，按「第 X 集」标题自动分集，每集正文落库并保存版本。</p>
+        <p class="small muted">粘贴整部原稿，按「第 X 集」标题自动分集，每集正文落库并保存版本。<b>重新导入会覆盖现有剧集</b>，不会累加。</p>
         <div class="field"><textarea id="impBook" class="textarea" placeholder="第一集 初遇&#10;场景：江边&#10;林远：我回来了。&#10;&#10;第二集 夜渡…"></textarea></div>
-        <div class="inline mt"><button class="btn" id="btnImportBook">导入并自动分集</button></div>
+        <div class="inline mt"><button class="btn" id="btnImportBook">导入并自动分集</button>
+          <label class="small muted" style="display:inline-flex;align-items:center;gap:6px"><input id="impBookAppend" type="checkbox"> 追加不覆盖</label></div>
       </div>
       <div id="tab-rw" class="hidden">
         <p class="small muted">当前剧集：<b>${esc(ep?ep.title:'无')}</b>。改写保留前后对照，写入版本链。</p>
@@ -858,7 +873,7 @@ function bindViewEvents() {
         duration_target: parseInt($('#prjDuration').value) || 60,
         budget_total: form.budget_total,
       });
-      toast(`已保存：补齐 ${r.created_episodes} 集骨架`, 'ok');
+      toast(`已保存：新增 ${r.created_episodes} 集 / 移除 ${r.removed_episodes || 0} 集`, 'ok');
       await loadBase(); await refresh();
     } catch (e) { toast(e.message, 'err'); }
   };
@@ -874,7 +889,7 @@ function bindViewEvents() {
         episodes: parseInt($('#genEpisodes').value) || 1,
         duration_target: parseInt($('#genDuration').value) || 60,
       });
-      toast(`已生成 ${r.episodes.length} 集大纲（桩）`, 'ok');
+      toast(`已生成 ${r.episodes.length} 集结构化正文，可到「拆镜」步骤拆成分镜`, 'ok');
       await refresh();
     } catch (e) { toast(e.message, 'err'); }
   };
@@ -884,9 +899,11 @@ function bindViewEvents() {
       const pid = await ensureProject();
       const r = await api('POST', '/api/script/import-book', {
         project_id: pid, text: $('#impBook').value,
+        mode: $('#impBookAppend')?.checked ? 'append' : 'replace',
       });
       if (!r.chapters) throw new Error('剧本文本为空');
-      toast(`已导入并分集：${r.chapters} 集`, 'ok'); await refresh();
+      const hint = r.replaced ? `（覆盖原 ${r.replaced} 集）` : '';
+      toast(`已导入并分集：${r.chapters} 集${hint}`, 'ok'); await refresh();
     } catch (e) { toast(e.message, 'err'); }
   };
   const btnRewrite = $('#btnRewrite');
@@ -895,7 +912,7 @@ function bindViewEvents() {
       const r = await api('POST', '/api/script/rewrite', {
         episode_id: state.episodeId, instruction: $('#rwInstruction').value || '更简洁',
       });
-      toast(`已改写并保存 v${r.version.version}（桩）`, 'ok'); await refresh();
+      toast(`已改写并保存 v${r.version.version}，保留前后对照`, 'ok'); await refresh();
       showModal('改写结果（前后对照）', r.version.before + '\n\n--- 改写后 ---\n\n' + r.text);
     } catch (e) { toast(e.message, 'err'); }
   };
@@ -976,6 +993,38 @@ function bindViewEvents() {
     state.view = 'workflow'; state.wfStep = 1;
     render().catch(e => toast(e.message, 'err'));
   });
+  // 修改单集：集序号 / 标题 / 目标时长（集序号冲突时后端自动交换，保持唯一）
+  content().querySelectorAll('.act-edit-ep').forEach(el => el.onclick = (ev) => {
+    ev.stopPropagation();
+    const ep = state.episodes.find(e => e.id === el.dataset.eid);
+    if (!ep) return;
+    const idx = prompt('集序号（第几集）：', String(ep.index));
+    if (idx === null) return;
+    const title = prompt('剧集标题：', ep.title || ('第' + ep.index + '集'));
+    if (title === null) return;
+    const dur = prompt('目标时长（秒）：', String(ep.duration_target || 60));
+    if (dur === null) return;
+    api('POST', '/api/episodes/' + encodeURIComponent(ep.id) + '/update', {
+      index: parseInt(idx) || 0,
+      title: title.trim(),
+      duration_target: parseFloat(dur) || 60,
+    }).then(() => {
+      toast('单集信息已更新', 'ok');
+      return refresh();
+    }).catch(e => toast(e.message, 'err'));
+  });
+  // 删除单集（级联清理镜头 / 提示词 / 任务 / 输出 / 剧本版本，审计日志保留）
+  content().querySelectorAll('.act-del-ep').forEach(el => el.onclick = (ev) => {
+    ev.stopPropagation();
+    const ep = state.episodes.find(e => e.id === el.dataset.eid);
+    if (!ep) return;
+    if (!confirm('确定删除第 ' + ep.index + ' 集？该集镜头、提示词、任务与成片将一并清理，且不可撤销。')) return;
+    api('DELETE', '/api/episodes/' + encodeURIComponent(ep.id)).then(r => {
+      if (state.episodeId === ep.id) state.episodeId = '';
+      toast(`已删除该集，并清理 ${r.removed_related} 条关联记录`, 'ok');
+      return refresh();
+    }).catch(e => toast(e.message, 'err'));
+  });
 
   // 剧本管理 tabs（ai / import）
   if (state.view === 'script') bindGroupTabs('ai');
@@ -1003,8 +1052,27 @@ function bindViewEvents() {
     if (!text) { toast('请先粘贴整部剧本', 'err'); return; }
     try {
       const pid = await ensureProject();
-      const r = await api('POST', '/api/script/import-book', { project_id: pid, text });
-      toast(`已导入并分集：${r.chapters} 集`, 'ok'); await refresh();
+      const r = await api('POST', '/api/script/import-book', {
+        project_id: pid, text,
+        mode: $('#importAppend')?.checked ? 'append' : 'replace',
+      });
+      const hint = r.replaced ? `（覆盖原 ${r.replaced} 集）` : '';
+      toast(`已导入并分集：${r.chapters} 集${hint}`, 'ok'); await refresh();
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  // 直接调整整部剧的集数：减少会移除末尾多余的集，增加会补齐骨架
+  const btnApplyEpCount = $('#btnApplyEpCount');
+  if (btnApplyEpCount) btnApplyEpCount.onclick = async () => {
+    const n = parseInt($('#scriptEpCount')?.value) || 0;
+    if (n < 1) { toast('集数至少为 1', 'err'); return; }
+    try {
+      const pid = await ensureProject();
+      const r = await api('POST', '/api/projects/' + encodeURIComponent(pid) + '/settings', {
+        episode_count: n,
+        duration_target: parseInt($('#scriptEpDuration')?.value) || 60,
+      });
+      toast(`集数已更新：新增 ${r.created_episodes} 集 / 移除 ${r.removed_episodes || 0} 集`, 'ok');
+      await refresh();
     } catch (e) { toast(e.message, 'err'); }
   };
 

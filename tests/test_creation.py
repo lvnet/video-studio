@@ -177,10 +177,19 @@ class RuleRegistryTests(unittest.TestCase):
 
 class LLMPluginTests(unittest.TestCase):
     def test_stub_provider(self):
+        """本地生成引擎：产出结构化、可拆镜正文（不再是占位文字）。"""
         p = get_provider()
-        self.assertEqual(len(p.generate_outline("梗概", 3)), 3)
-        self.assertIn("改写", p.rewrite("正文", "更幽默").text)
-        self.assertIn("续写", p.continue_script("前文", 2))
+        outlines = p.generate_outline("旅人回到江边寻找故人", 3)
+        self.assertEqual(len(outlines), 3)
+        # 每集都含可拆镜结构：场景行 + 对白
+        for text in outlines:
+            self.assertIn("场景：", text)
+            self.assertGreater(len(text), 40)
+        # 改写保留原文并带指令痕迹；续写非空且有场景行
+        rewritten = p.rewrite("正文", "更幽默")
+        self.assertIn("正文", rewritten.text)
+        self.assertTrue(rewritten.text)
+        self.assertIn("场景：", p.continue_script("前文", 2))
 
 
 if __name__ == "__main__":

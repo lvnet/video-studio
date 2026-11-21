@@ -34,20 +34,29 @@ class LLMProvider(ABC):
 
 
 class StubLLMProvider(LLMProvider):
-    """本地桩：不调用任何外部算力，返回可预测的占位结果，供流程测试。"""
+    """本地剧本生成引擎（确定性规则，零外部算力、零版权风险）。
+
+    历史上这里是纯占位桩（"第X集大纲（基于梗概…）"），产出无法拆镜，
+    导致八步流程看着全却都不出真东西。现改为调用 story_engine：
+    按梗概生成结构化、可拆镜的分集正文，改写/续写也做真实规则处理。
+    接口保持不变，未来接真实 LLM 仍只需 set_provider() 注入。
+    """
 
     def generate_outline(self, synopsis: str, episodes: int) -> list[str]:
-        return [f"第{i + 1}集大纲（基于梗概：{synopsis[:20]}…）" for i in range(episodes)]
+        from .story_engine import generate_outlines
+        return generate_outlines(synopsis, episodes)
 
     def rewrite(self, text: str, instruction: str) -> RewriteResult:
+        from .story_engine import rewrite_text
         return RewriteResult(
-            text=f"[改写:{instruction}] {text}",
+            text=rewrite_text(text, instruction),
             before=text,
-            model="stub",
+            model="local_engine",
         )
 
     def continue_script(self, context: str, n: int) -> str:
-        return f"{context}\n[续写段落 ×{n}（桩）]"
+        from .story_engine import continue_script
+        return continue_script(context, n)
 
 
 _provider: LLMProvider = StubLLMProvider()

@@ -298,6 +298,71 @@ def h_episodes_create(handler, m, body, q):
     return {"episode": ep.to_dict()}
 
 
+def _cascade_delete_episode(state, eid: str) -> int:
+    """删除单集及其全部下游数据，避免留下孤儿记录。返回删除的关联记录数。
+
+    注意：审计日志保留（合规要求可追溯），不随剧集删除。
+    """
+    removed = 0
+    shot_ids = {s["id"] for s in state.store.find("shots", episode_id=eid)}
+    task_ids = {t["id"] for t in state.store.all("tasks") if t.get("shot_id") in shot_ids}
+
+    def _purge(name: str, predicate) -> None:
+        nonlocal removed
+        for rec in list(state.store.all(name)):
+            if predicate(rec):
+                state.store.delete(name, rec["id"])
+                removed += 1
+
+    _purge("outputs", lambda r: r.get("task_id") in task_ids or r.get("shot_id") in shot_ids)
+    _purge("tasks", lambda r: r.get("id") in task_ids or r.get("shot_id") in shot_ids)
+    _purge("prompts", lambda r: r.get("shot_id") in shot_ids or r.get("episode_id") == eid)
+    _purge("shots", lambda r: r.get("episode_id") == eid)
+    _purge("script_versions", lambda r: r.get("episode_id") == eid)
+    return removed
+
+
+def h_episode_update(handler, m, body, q):
+    """修改单集：集序号 / 标题 / 目标时长 / 状态。集序号冲突时与目标集自动交换。"""
+    eid = m.group(1)
+    state = get_state()
+    ep = state.store.get("episodes", eid)
+    changes: dict = {}
+    if "title" in body:
+        changes["title"] = str(body["title"]).strip()
+    if "duration_target" in body:
+        changes["duration_target"] = float(body["duration_target"] or 60)
+    if "status" in body:
+        changes["status"] = str(body["status"]).strip()
+    if "index" in body:
+        new_index = int(body["index"] or 0)
+        if new_index < 1:
+            raise ApiError(400, "集序号至少为 1")
+        old_index = int(ep.get("index", 0))
+        if new_index != old_index:
+            for other in state.store.find("episodes", project_id=ep["project_id"]):
+                if other["id"] != eid and int(other.get("index", 0)) == new_index:
+                    state.store.update("episodes", other["id"], index=old_index)
+                    break
+            changes["index"] = new_index
+    if changes:
+        state.store.update("episodes", eid, **changes)
+    return {"episode": state.store.get("episodes", eid),
+            "episodes": state.store.find("episodes", project_id=ep["project_id"])}
+
+
+def h_episode_delete(handler, m, body, q):
+    """删除单集并级联清理其镜头/提示词/任务/输出/剧本版本。"""
+    eid = m.group(1)
+    state = get_state()
+    ep = state.store.get("episodes", eid)
+    pid = ep["project_id"]
+    removed = _cascade_delete_episode(state, eid)
+    state.store.delete("episodes", eid)
+    return {"deleted": eid, "removed_related": removed,
+            "episodes": state.store.find("episodes", project_id=pid)}
+
+
 def h_script_import(handler, m, body, q):
     """导入剧本 → 自动拆镜，落库并返回镜头 + 缺字段报告。"""
     _require(body, "episode_id", "text")
@@ -1033,7 +1098,7 @@ def h_workflow_steps(handler, m, body, q):
 
 # --- 第 1 步：项目制作设置（集数 / 单集时长 / 预算 → 生成剧集骨架） ---
 def h_project_settings(handler, m, body, q):
-    """设置项目制作参数并生成剧集骨架（已有剧集不重复创建）。"""
+    """设置项目制作参数并按集数调整剧集骨架（补齐缺少的、移除超出的）。"""
     pid = m.group(1)
     state = get_state()
     proj = state.store.get("projects", pid)
@@ -1050,6 +1115,7 @@ def h_project_settings(handler, m, body, q):
     ep_count = int(body.get("episode_count", 0) or 0)
     duration = float(body.get("duration_target", 60) or 60)
     created = 0
+    removed = 0
     if ep_count > 0:
         existing = state.store.find("episodes", project_id=pid)
         have = {int(e.get("index", 0)) for e in existing}
@@ -1062,10 +1128,17 @@ def h_project_settings(handler, m, body, q):
                 duration_target=duration,
             ))
             created += 1
+        # 集数调小：移除超出范围的末尾剧集（含其下游数据），使集数真正可修改
+        for e in existing:
+            if int(e.get("index", 0)) > ep_count:
+                _cascade_delete_episode(state, e["id"])
+                state.store.delete("episodes", e["id"])
+                removed += 1
     return {"project": state.store.get("projects", pid),
             "episodes": state.store.find("episodes", project_id=pid),
             "created_episodes": created,
-            "note": "剧集骨架已生成；已有剧集保持不变，可到剧本步骤继续。"}
+            "removed_episodes": removed,
+            "note": "集数已按设定更新；已有剧集保持不变，超出集数的末尾剧集已移除。"}
 
 
 # --- 第 2 步：剧本（梗概生成 / 整本导入 / AI 改写 / 版本链） ---
@@ -1106,36 +1179,121 @@ def h_script_generate_outline(handler, m, body, q):
             "note": "LLM 为本地桩：按梗概生成原创大纲，不调用外部算力。"}
 
 
+_EP_TITLE_RE = re.compile(r"^第\s*([0-9零一二三四五六七八九十百千]+)\s*集")
+
+
+def _cn_to_int(s: str) -> int | None:
+    """把「12」或「十二」「第一百二十」等中文数字转成 int；失败返回 None。"""
+    if s.isdigit():
+        return int(s)
+    digit = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+             "六": 6, "七": 7, "八": 8, "九": 9}
+    if not s or any(c not in digit and c not in "十百千" for c in s):
+        return None
+    total, section, number = 0, 0, 0
+    for c in s:
+        if c in digit:
+            number = digit[c]
+        elif c == "十":
+            section += (number or 1) * 10
+            number = 0
+        elif c == "百":
+            section += (number or 1) * 100
+            number = 0
+        elif c == "千":
+            section += (number or 1) * 1000
+            number = 0
+    return section + number
+
+
+def _split_episodes(text: str) -> list[dict]:
+    """按「行首独立成行的 第X集」标题切分整部剧本。
+
+    只把独占一行的「第X集 …」当作新集起点；正文中间出现的"第X集"字样
+    一律保留在正文里，避免误切导致集序号与标题错乱。返回按出现顺序排列、
+    index 连续（1..n）的分集列表。
+    """
+    lines = text.splitlines()
+    cuts: list[tuple[int, int, str]] = []  # (行号, 集号, 标题)
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        mm = _EP_TITLE_RE.match(stripped)
+        if not mm:
+            continue
+        # 标题行：去掉集号后剩余作为副标题（可能为空），限制长度
+        rest = stripped[mm.end():].strip(" :：·-—")
+        num = _cn_to_int(mm.group(1))
+        title = f"第{num}集" if num else f"第{stripped[mm.start():mm.end()].strip()}集"
+        if rest:
+            title += " " + rest[:30]
+        cuts.append((i, num or (len(cuts) + 1), title))
+
+    if not cuts:
+        return []
+
+    # 未匹配到标题的前置内容并入第一集
+    result: list[dict] = []
+    for k, (line_no, num, title) in enumerate(cuts):
+        end = cuts[k + 1][0] if k + 1 < len(cuts) else len(lines)
+        start = line_no if k == 0 else line_no
+        body_lines = lines[start:end]
+        # 第一集把标题行之前的引言也带上
+        if k == 0 and line_no > 0:
+            body_lines = lines[0:end]
+        body = "\n".join(body_lines).strip()
+        result.append({"index": k + 1, "title": title, "text": body})
+    return result
+
+
 def h_script_import_book(handler, m, body, q):
-    """导入整部原稿，按「第X集」标题自动分集，每集正文落库并保存版本。"""
+    """导入整部原稿，按「第X集」标题自动分集，每集正文落库并保存版本。
+
+    默认 mode='replace'：先清空该项目已有剧集（级联清理下游数据、审计保留），
+    再从第 1 集重新编号导入，避免重复导入导致集数累加。
+    mode='append'：保留旧集，从末尾续接（显式追加场景）。
+    """
     _require(body, "project_id", "text")
     state = get_state()
     pid = body["project_id"]
     state.store.get("projects", pid)
     text = body["text"]
     duration = float(body.get("duration_target", 60) or 60)
-    # 按「第X集」标题切分；无标题则整篇作为一集
-    parts = re.split(r"(?=第[0-9一二三四五六七八九十百]+集)", text)
-    chapters = [p.strip() for p in parts if p.strip()]
+    mode = body.get("mode", "replace")
+    # 严格分集：只把「行首独立成行的 第X集」当作集标题，正文里出现的
+    # "第一集就全部知道真相…"这类句子不会被误切成新集，避免集序号与标题错乱。
+    chapters = _split_episodes(text)
     if not chapters:
-        chapters = [text.strip()]
-    base = len(state.store.find("episodes", project_id=pid))
+        chapters = [{"index": 1, "title": "第1集", "text": text.strip()}]
+
+    replaced = 0
+    if mode == "replace":
+        # 整部重新导入 = 覆盖：清空旧集（级联清理镜头/提示词/任务/输出/版本）
+        for old in state.store.find("episodes", project_id=pid):
+            _cascade_delete_episode(state, old["id"])
+            state.store.delete("episodes", old["id"])
+            replaced += 1
+        base = 0
+    else:  # append：从末尾续接
+        base = len(state.store.find("episodes", project_id=pid))
+
     made = []
     for j, ch in enumerate(chapters, start=1):
-        first_line = ch.splitlines()[0].strip() if ch.splitlines() else ""
-        title = first_line[:40] if re.match(r"^第[0-9一二三四五六七八九十百]+集", first_line) else f"第{base + j}集"
-        ep = Episode(id=new_id("ep"), project_id=pid, index=base + j,
-                     title=title, duration_target=duration, script_text=ch)
+        idx = base + j
+        ep = Episode(id=new_id("ep"), project_id=pid, index=idx,
+                     title=ch["title"] or f"第{idx}集", duration_target=duration,
+                     script_text=ch["text"])
         state.store.add("episodes", ep)
-        report = check_prompt(ch[:500], subject=ep.id)
+        report = check_prompt(ch["text"][:500], subject=ep.id)
         _audit(state, "script_import", ep.id, report, {"source": "book_import"})
         state.store.add("script_versions", ScriptVersion(
-            id=new_id("sv"), episode_id=ep.id, version=1, text=ch,
+            id=new_id("sv"), episode_id=ep.id, version=1, text=ch["text"],
             source="import", confirmed=False,
         ))
-        made.append({"episode_id": ep.id, "index": ep.index, "title": title})
-    return {"episodes": made, "chapters": len(made),
-            "note": "整本导入完成，已按集标题自动分集。"}
+        made.append({"episode_id": ep.id, "index": ep.index, "title": ep.title})
+    note = ("已覆盖导入：按「第X集」标题行顺序分集，序号连续。" if mode == "replace"
+            else "已追加导入：在原剧集末尾续接。")
+    return {"episodes": made, "chapters": len(made), "replaced": replaced,
+            "mode": mode, "note": note}
 
 
 def h_script_rewrite(handler, m, body, q):
@@ -1480,6 +1638,8 @@ ROUTES: list[tuple[str, re.Pattern, Callable]] = [
     ("GET", r"^/api/projects/([^/]+)$", h_projects_get),
     ("GET", r"^/api/episodes$", h_episodes_list),
     ("POST", r"^/api/episodes$", h_episodes_create),
+    ("POST", r"^/api/episodes/([^/]+)/update$", h_episode_update),
+    ("DELETE", r"^/api/episodes/([^/]+)$", h_episode_delete),
     ("POST", r"^/api/script/import$", h_script_import),
     ("GET", r"^/api/shots$", h_shots_list),
     ("GET", r"^/api/assets$", h_assets_list),
@@ -1565,6 +1725,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # 工作台前端频繁迭代，禁用缓存，避免用户看到旧界面（改动不生效）
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        # 用完即断：避免 keep-alive 连接跨测试类遗留，访问到被重置的全局 STATE
+        self.send_header("Connection", "close")
+        self.close_connection = True
         self.end_headers()
         self.wfile.write(data)
 

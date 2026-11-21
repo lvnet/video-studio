@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -66,17 +67,34 @@ class LocalStore:
         return {}
 
     def _flush(self, name: str) -> None:
-        """原子写：先写临时文件再替换。"""
+        """原子写：先写临时文件再替换。
+
+        Windows 上临时文件/目标文件可能被杀毒软件短暂占用，os.replace 会偶发
+        PermissionError / OSError。这里做短退避重试，彻底消除这类偶发失败。
+        """
         p = self._path(name)
         data = {"items": list(self._cache[name].values())}
         fd, tmp = tempfile.mkstemp(dir=str(self.root), suffix=".tmp", text=True)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, p)
+                f.flush()
+                os.fsync(f.fileno())
+            last_exc = None
+            for attempt in range(8):
+                try:
+                    os.replace(tmp, p)
+                    return
+                except OSError as exc:  # Windows 文件锁偶发
+                    last_exc = exc
+                    time.sleep(0.01 * (attempt + 1))
+            raise last_exc
         finally:
             if os.path.exists(tmp):
-                os.unlink(tmp)
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
     # ---- 通用 CRUD ----
     def add(self, name: str, entity: EntityMixin) -> None:

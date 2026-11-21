@@ -93,6 +93,7 @@ class WorkflowApiTest(unittest.TestCase):
         s, d = self.req("POST", "/api/script/import-book", {
             "project_id": self.pid,
             "text": "第一集 初遇\n场景：江边\n林远：你好。\n\n第二集 再会\n场景：渡口\n守渡人：终于来了。",
+            "mode": "append",  # 追加，保留 setUpClass 建立的 cls.eid 供后续步骤使用
         })
         self.assertEqual(s, 200)
         self.assertEqual(d["chapters"], 2)
@@ -264,7 +265,7 @@ class FreshProjectBootstrapTest(unittest.TestCase):
         self.assertEqual(len(d["episodes"]), 2)
         # 整本导入同样可用
         s, d = self.req("POST", "/api/script/import-book",
-                        {"project_id": pid, "text": "第一集 初遇\n场景：江边\nA：你好。"})
+                        {"project_id": pid, "text": "第一集 初遇\n场景：江边\nA：你好。", "mode": "append"})
         self.assertEqual(s, 200)
         self.assertGreaterEqual(d["chapters"], 1)
         # 空 project_id 仍被后端明确拒绝（前端已兜底，属防御性契约）
