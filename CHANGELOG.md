@@ -4,7 +4,31 @@
 
 ## [Unreleased]
 
+### Added（算力接口做实）
+- **三种算力后端接口全部做实，默认内存桩、零外连、零成本、零版权风险**：
+  - **ComfyUI 全套 HTTP API**：`/system_stats`（健康）、`/object_info`（能力发现）、`POST /prompt`（提交 workflow graph）、`/queue`、`/history/{id}`（轮询）、`/view`（产物字节 + 落盘 + sha256）、`POST /upload/image`（multipart 参考图）、`/interrupt`（取消）。新增 `comfyui_workflow.build_workflow()`，节点类型仅默认模板、可用 `payload['workflow']` 覆盖，不硬编码/不下载模型权重。
+  - **Cloud API**：鉴权只从 `credentials_ref` 环境变量引用读取（密钥不明文入库/下发），请求/响应字段映射、云端任务状态归一、产物 `storage_uri + sha256`、按秒/分辨率可配置计价。
+  - **Cloud GPU**：Agent 注册（能力标签）、心跳、按 mode 能力匹配派单（r2v 只派给声明 r2v 的节点，避免回退 FL2VA 丢身份锁定）、租约、产物由 Agent 推对象存储。
+  - **HTTP 客户端底座**：`StubHttpClient`（默认内存桩）/ `UrllibHttpClient`（标准库真实请求）/ `FakeHttpClient`（测试断言协议）；传输层与协议逻辑解耦。
+  - **配置驱动**：`ComputeConfig.from_backend_config()` 从 `BackendConfig` 构造，`VS_COMPUTE_DRY_RUN=0` 才走真实连接；密钥只读引用名，公共视图绝不含明文。
+  - **注册表增强**：`BackendRegistry` 支持配置驱动构造、记录激活后端、`status()` 全景视图；`switch()` 真正切换激活项。
+- **工作台「算力管理」页**：三种后端全景（模式/健康/能力/配置）、一键切换、接口自检（桩跑通 submit→poll→fetch）、ComfyUI 工作流预览；新增 5 条算力 API（共 67 条）。
+- **测试**：新增 `tests/test_compute_interfaces.py`（23 项，真实协议用假客户端验证、不真实外连）+ 5 项工作台算力端点测试；全量 167 测试全绿，doctor 新增算力接口自检。
+
 ### Changed
+- **算力桩语义升级**：`fetch()` 从抛 `NotImplementedError` 改为桩模式推进任务到完成并返回带 64 位 sha256 的规范化 `Artifact`；不存在任务/无产物引用时明确报错。`poll()` 桩模式按 queued→running→succeeded 推进，不再停留 queued。旧测试相应更新（保留接口一致性验证）。
+- **工作台升级为方案定稿八步制作流程**：统一原先三套不一致的流程定义（核心能力链 / 方案八步 / 前端六步），前端从六步改为八步，每步功能点全部做实（不再有 toast 占位）。左侧导航改为「剧本/分集管理、八步制作流程、资产库、合成完整视频、视频生成配置、编辑专家、成本闸门、合规审计」。API 路由增至 62 条。
+- **示例数据增强**：demo 生成 3 集原创剧本、角色性别识别、批准态提示词、多类型资产库、桩任务与采用版、合成历史；预览连线检查刻意保留一个缺参考图镜头以演示高亮。
+
+### Added
+- **八步制作流程**（每步功能点均为真实可调用接口）：① 创建项目（制作设置 + 幂等生成剧集骨架）② 剧本（梗概生成大纲 / 整本导入自动分集 / AI 改写前后对照 / 版本链 + 人工确认）③ 拆镜（自动拆镜 / 缺字段高亮 / 镜头编辑）④ 参考资产（登记 + 来源声明 / 人工批准 / 绑定已批准资产并锁定版本）⑤ 提示词（H3/R2V 扩写 / 批量 / 批准评分 / 清理未批准）⑥ 提交生成（成本闸门 / 批量建任务 / 一键停止）⑦ 监控挑片（2–4 候选 / 挑片采用 / 失败码诊断 / 一键重试）⑧ 精修成片（裁头 + 拼接 + SRT + CTA + 升清装配计划 / 成片导出）。
+- **工作流定义模块**：`video_studio/creation/workflow.py`，前后端通过 `/api/workflow/steps` 共享八步 25 个功能点定义。
+- **新实体**：ScriptVersion（剧本版本链，支持前后对照与人工确认）。
+- **URL 深链**：`#workflow/step=0..7` 直接打开指定步骤。
+- **八步流程集成测试**：12 个新 HTTP 测试，全量测试达 138 个；`doctor.py` 新增「八步流程与功能点」自检项。
+- **新页面**：剧本/分集管理（多集目录 + AI生成/导入双 tab）、资产库（分类统计/搜索）、合成完整视频（版本/范围/合成历史 CRUD）、视频生成配置（H3 R2V + SeedVR2 参数面板，仅存配置不打包权重）、编辑专家（内置 prompt 库 + 自定义专家 CRUD）。
+- **新实体**：VideoConfig / Expert / ComposeRecord；Prompt 增 approved/score 字段支撑批准评分。
+- **工作台 API 集成测试**：12 个新 HTTP 测试，全量测试达 126 个（100 单元 + 26 API 集成）。
 - **合规补强**：版权守卫与内容安全过滤改用归一化匹配（全角/空格/繁简/形近字），提高黑名单绕过成本；新增内容安全分级过滤器（BLOCK/REVIEW）；新增只追加审计日志（哈希链防篡改、可查询）。仍诚实标注为最小守卫，非绝对保证。
 - **架构修复**：算力层请求对象 `Task` 更名为 `GenRequest`，与控制面持久化 `Task` 区分；`compute.Task` 保留为向后兼容别名。
 - **文档**：新增 ARCHITECTURE.md，明确 LocalStore 单机边界（无事务/无并发锁）与迁移 PostgreSQL 路径、合规与算力边界。

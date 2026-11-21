@@ -121,7 +121,7 @@ class RuleSet(EntityMixin):
 
 @dataclass
 class Prompt(EntityMixin):
-    """提示词版本链：parent_id 指向上一版。"""
+    """提示词版本链：parent_id 指向上一版。approved/score 支撑批准与评分。"""
 
     id: str
     shot_id: str
@@ -129,6 +129,8 @@ class Prompt(EntityMixin):
     content: str
     rule_set_id: str = ""
     parent_id: str = ""
+    approved: bool = False
+    score: float = 0.0
     created_by: str = "user"
     created_at: str = field(default_factory=utcnow)
 
@@ -215,6 +217,62 @@ class CostLedger(EntityMixin):
     updated_at: str = field(default_factory=utcnow)
 
 
+@dataclass
+class VideoConfig(EntityMixin):
+    """视频生成配置（H3 R2V+VAD / SeedVR2 超分等模型参数）。
+
+    仅存配置参数，不存模型权重/密钥；真实算力接入后置，此处为可编辑的配置面板数据。
+    """
+
+    id: str
+    name: str = "默认配置"
+    params: dict[str, Any] = field(default_factory=dict)
+    updated_at: str = field(default_factory=utcnow)
+
+
+@dataclass
+class Expert(EntityMixin):
+    """编辑专家：可编辑的 prompt 专家库条目（剧本生成/续写/拆解/提示词扩写等）。"""
+
+    id: str
+    name: str
+    category: str = ""
+    description: str = ""
+    system_prompt: str = ""
+    enabled: bool = True
+    builtin: bool = False
+
+
+@dataclass
+class ScriptVersion(EntityMixin):
+    """剧本版本链：每集每次改写/生成都留一版，支持前后对照与人工确认。"""
+
+    id: str
+    episode_id: str
+    version: int
+    text: str
+    before: str = ""
+    instruction: str = ""
+    source: str = "stub"            # stub / import / manual
+    confirmed: bool = False         # 人工确认标记
+    created_at: str = field(default_factory=utcnow)
+
+
+@dataclass
+class ComposeRecord(EntityMixin):
+    """合成历史：按版本/剧集合成的成片记录（成片文件不入库，只存引用）。"""
+
+    id: str
+    project_id: str
+    name: str = ""
+    version: str = ""
+    episode_range: str = ""
+    output_url: str = ""
+    duration: float = 0.0
+    size_mb: float = 0.0
+    created_at: str = field(default_factory=utcnow)
+
+
 # 便于按名称取实体类型（store 用）
 ENTITY_TYPES: dict[str, type] = {
     "projects": Project,
@@ -230,4 +288,8 @@ ENTITY_TYPES: dict[str, type] = {
     "tasks": Task,
     "outputs": Output,
     "cost_ledgers": CostLedger,
+    "video_configs": VideoConfig,
+    "experts": Expert,
+    "compose_records": ComposeRecord,
+    "script_versions": ScriptVersion,
 }

@@ -55,8 +55,30 @@
 - 真正的零风险需要：供应商内容安全 API、生成结果留痕审计、人工复核、用户协议免责。
 - 详见 COMPLIANCE.md。
 
-## 算力边界
+## 算力适配层（接口已做实，默认桩）
 
-- 三种后端当前均为接口一致的桩实现，真实 API/GPU 调用全部后置（TODO 明确标注）。
-- `fetch()` 抛 `NotImplementedError` 而非静默失败，避免误用桩产出。
-- 注册表 `BackendRegistry` 支持按 kind 注册/切换/缓存，接真实后端只需注册工厂。
+三种后端接口全部做实，但**默认走内存桩**：零外连、零成本、零版权风险。
+要接真实算力须显式关闭 `dry_run` 并注入 `HttpClient`；上层业务无感。
+
+- `Backend` 统一契约：`capabilities / health / estimate / submit / poll / fetch / cancel / normalize_error`。
+- 传输层 `HttpClient` 与协议逻辑解耦：默认 `StubHttpClient`（内存模拟），
+  真实模式用 `UrllibHttpClient`（标准库，无第三方依赖），测试用 `FakeHttpClient` 断言协议。
+- **ComfyUI 全套 HTTP API**：`GET /system_stats`（健康）、`GET /object_info`（能力发现）、
+  `POST /prompt`（提交 workflow graph）、`GET /queue`、`GET /history/{id}`（轮询）、
+  `GET /view`（产物字节）、`POST /upload/image`（multipart 参考图）、`POST /interrupt`（取消）。
+  workflow 由 `build_workflow()` 生成，节点类型仅为默认模板，可用 `payload['workflow']` 覆盖
+  （不硬编码模型权重，不下载任何权重）。产物落本地目录并计算 sha256，返回规范化 `storage_uri`。
+- **Cloud API**：鉴权只从 `credentials_ref` 指向的环境变量读取（密钥不明文入库/下发），
+  请求/响应字段映射、云端任务状态归一、产物 `storage_uri + sha256`、可配置计价（按秒/分辨率）。
+- **Cloud GPU**：Agent 注册（能力标签 `mode/vram/upscale`）、心跳、按 mode 能力匹配派单
+  （r2v 只派给声明 r2v 的节点，避免回退 FL2VA 丢身份锁定）、租约、产物由 Agent 推对象存储。
+- `fetch()` 桩模式推进任务到完成并返回带 64 位 sha256 的 `Artifact`；任务不存在或云端产物
+  无 `storage_uri` 时明确报错，不静默返回假产物。
+- 失败经 `normalize_error()` 归一到统一 `FailureCode`（transient / invalid_params /
+  out_of_budget / node_dead / unknown），供状态机决策重试/死信。
+- 注册表 `BackendRegistry` 支持按 kind 注册/切换/缓存、从 `BackendConfig` 配置驱动构造、
+  记录激活后端，`status()` 输出可下发的全景视图（不含密钥明文）。
+
+**安全边界**：密钥只存环境变量引用名，`ComputeConfig.to_public_dict()` 与
+`/api/compute/configs` 绝不下发密钥明文；本平台不下载/打包任何模型权重，
+所有示例提示词原创，零版权素材复制。

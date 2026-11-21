@@ -72,20 +72,30 @@ class BackendInterfaceTests(unittest.TestCase):
                 self.assertTrue(hasattr(b, m), f"{b.kind} 缺方法 {m}")
 
     def test_submit_poll_cancel_consistent(self):
+        # 桩任务提交后状态可推进（不再停留在 queued）；取消后回到 unknown。
         for b in [CloudApiBackend("k", "http://x"), LocalComfyUIBackend(), CloudGpuBackend()]:
             with self.subTest(kind=b.kind):
                 tid = b.submit(GenRequest(task_id="t", step="video", payload={"x": 1}))
                 self.assertTrue(tid)
-                self.assertEqual(b.poll(tid).state, "queued")
+                self.assertIn(b.poll(tid).state, {"queued", "leased", "running", "succeeded"})
                 self.assertTrue(b.cancel(tid))
                 self.assertEqual(b.poll(tid).state, "unknown")
 
-    def test_fetch_is_explicit_stub(self):
-        # 真实算力后置：fetch 明确抛 NotImplementedError，而非静默失败
+    def test_fetch_returns_canonical_artifact(self):
+        # 接口做实后：桩 fetch 推进到完成并返回带 sha256 的规范化产物契约。
         for b in [CloudApiBackend("k", "http://x"), LocalComfyUIBackend(), CloudGpuBackend()]:
             with self.subTest(kind=b.kind):
-                with self.assertRaises(NotImplementedError):
-                    b.fetch("any")
+                tid = b.submit(GenRequest(task_id="t", step="video", payload={"x": 1}))
+                artifact = b.fetch(tid)
+                self.assertTrue(artifact.storage_uri)
+                self.assertEqual(len(artifact.sha256), 64)
+
+    def test_fetch_unknown_task_raises(self):
+        # 不存在的任务明确报错，而非静默返回假产物。
+        for b in [CloudApiBackend("k", "http://x"), LocalComfyUIBackend(), CloudGpuBackend()]:
+            with self.subTest(kind=b.kind):
+                with self.assertRaises(RuntimeError):
+                    b.fetch("nonexistent")
 
     def test_kinds_distinct(self):
         self.assertEqual(
