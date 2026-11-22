@@ -56,6 +56,7 @@ from video_studio.creation import (  # noqa: E402
     expand_prompt,
     import_script,
     missing_fields_report,
+    normalize_screenplay_text,
     steps_as_dicts,
 )
 from video_studio.creation.llm import get_provider  # noqa: E402
@@ -1392,14 +1393,18 @@ def h_script_import_book(handler, m, body, q):
     made = []
     for j, ch in enumerate(chapters, start=1):
         idx = base + j
+        # 关键：把创作案 Markdown 标记规范成干净可读剧本再落库。
+        # 否则「当前正文」和「版本查看」里全是 **、####、>、*（情绪）*，看着乱糟糟。
+        clean = normalize_screenplay_text(ch["text"])
         ep = Episode(id=new_id("ep"), project_id=pid, index=idx,
                      title=ch["title"] or f"第{idx}集", duration_target=duration,
-                     script_text=ch["text"])
+                     script_text=clean,
+                     summary=re.sub(r"\s+", "", clean)[:40])
         state.store.add("episodes", ep)
-        report = check_prompt(ch["text"][:500], subject=ep.id)
+        report = check_prompt(clean[:500], subject=ep.id)
         _audit(state, "script_import", ep.id, report, {"source": "book_import"})
         state.store.add("script_versions", ScriptVersion(
-            id=new_id("sv"), episode_id=ep.id, version=1, text=ch["text"],
+            id=new_id("sv"), episode_id=ep.id, version=1, text=clean,
             source="import", confirmed=False,
         ))
         made.append({"episode_id": ep.id, "index": ep.index, "title": ep.title})

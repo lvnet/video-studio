@@ -50,6 +50,64 @@ def _strip_emphasis(text: str) -> str:
     return re.sub(r"\*+", "", text or "").strip()
 
 
+def normalize_screenplay_text(text: str) -> str:
+    """把短剧创作案正文规范成干净可读的剧本文本（供展示与存储）。
+
+    真实原稿里的 Markdown 标记（`**加粗**`、`#### 场景`、`> 镜头`、`*（情绪）*`）
+    直接展示给用户就是"乱糟糟"。这里逐行清洗为统一格式：
+      - 制作元信息（时长/主要场景/本集任务）、纯段落标记、下集预告 → 丢弃
+      - `#### 场景 N　夜 / 地点 / 氛围` → `场景：地点`
+      - `**角色** *（情绪）*：台词` → `角色（情绪）：台词`
+      - `> 镜头：…` → `镜头：…`
+      - 普通叙述行去掉行内强调星号后原样保留
+      - 合并多余空行（连续空行压成一个）
+    规范化后的文本仍可被 ``parse_txt`` 正确拆镜（格式兼容）。
+    """
+    out: list[str] = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            # 连续空行压成一个
+            if out and out[-1] != "":
+                out.append("")
+            continue
+
+        # 制作元信息 / 段落标记 / 预告 → 丢弃
+        if _META_RE.match(line) or _SECTION_MARK_RE.match(line) or _PREVIEW_RE.match(line):
+            continue
+
+        # Markdown 场景标题 → 场景：地点
+        m = _MD_SCENE_RE.match(line)
+        if m:
+            loc = _scene_location(m.group(1))
+            out.append(f"场景：{loc}" if loc else "")
+            continue
+
+        # 创作案对白 → 角色（情绪）：台词
+        m = _MD_DIALOGUE_RE.match(line)
+        if m:
+            name, mood, content = m.group(1).strip(), m.group(2), m.group(3)
+            speaker = f"{name}（{mood.strip()}）" if mood else name
+            out.append(f"{speaker}：{_strip_emphasis(content)}")
+            continue
+
+        # 镜头调度：去掉引用符，保留「镜头：…/特写：…」
+        m = _CAMERA_RE.match(line)
+        if m:
+            out.append(f"{m.group(1)}：{_strip_emphasis(m.group(2))}")
+            continue
+
+        # 其它行：去掉行内强调星号
+        out.append(_strip_emphasis(line))
+
+    # 去掉首尾空行
+    while out and out[0] == "":
+        out.pop(0)
+    while out and out[-1] == "":
+        out.pop()
+    return "\n".join(out)
+
+
 @dataclass
 class RawBeat:
     """从剧本解析出的一个原始节拍。"""

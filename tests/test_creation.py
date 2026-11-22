@@ -13,6 +13,7 @@ from video_studio.creation import (
     get_provider,
     import_script,
     missing_fields_report,
+    normalize_screenplay_text,
     parse_json,
     parse_markdown,
     parse_txt,
@@ -70,6 +71,31 @@ class ScriptImportTests(unittest.TestCase):
         report = missing_fields_report(shots)
         self.assertEqual(len(report), 1)
         self.assertIn("action", report[0]["missing"])
+
+    def test_normalize_screenplay_text(self):
+        """创作案正文展示前清洗：去掉 Markdown 标记，保留可读剧本，仍可拆镜。"""
+        raw = (
+            "- **时长**：2分40秒\n"
+            "- **本集任务**：立钩子\n\n"
+            "**开场钩子**\n\n"
+            "#### 场景 1　夜 / 傅氏宴会厅 / 金色灯光\n\n"
+            "苏晚站在角落。\n\n"
+            "**司仪** *（高亢）*：让我们恭喜傅总——\n\n"
+            "> 镜头：中近景压低机位。**局部强调**。\n\n"
+            "**下集预告：**她救了他。**\n"
+        )
+        clean = normalize_screenplay_text(raw)
+        # 所有 Markdown 标记消失
+        for junk in ("**", "####", "> 镜头", "- **", "开场钩子", "下集预告", "时长", "本集任务"):
+            self.assertNotIn(junk, clean)
+        # 关键内容以干净格式保留
+        self.assertIn("场景：傅氏宴会厅", clean)
+        self.assertIn("司仪（高亢）：让我们恭喜傅总——", clean)
+        self.assertIn("镜头：中近景压低机位。局部强调。", clean)
+        # 规范化后仍可拆镜、无空镜头
+        beats = parse_txt(clean)
+        self.assertTrue(beats)
+        self.assertTrue(all(b.action or b.dialogue for b in beats))
 
     def test_creative_screenplay_format(self):
         """真实短剧创作案：制作标注丢弃、场景归位、对白/镜头调度各归其位。"""
