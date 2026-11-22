@@ -71,6 +71,41 @@ class ScriptImportTests(unittest.TestCase):
         self.assertEqual(len(report), 1)
         self.assertIn("action", report[0]["missing"])
 
+    def test_creative_screenplay_format(self):
+        """真实短剧创作案：制作标注丢弃、场景归位、对白/镜头调度各归其位。"""
+        text = (
+            "- **时长**：2分40秒\n"
+            "- **主要场景**：傅氏宴会厅\n"
+            "- **本集任务**：立钩子\n\n"
+            "**开场钩子 · 0-6 秒**\n\n"
+            "特写：一枚钻戒被推进无名指。\n\n"
+            "#### 场景 1　夜 / 傅氏宴会厅 / 金色灯光\n\n"
+            "苏晚站在角落，手里端着酒盘。\n\n"
+            "**司仪** *（高亢）*：让我们恭喜傅总——\n\n"
+            "> 镜头：中近景压低机位，从酒盘边缘往上看。\n\n"
+            "**集尾钩子**\n\n"
+            "**下集预告：**她救了他母亲。**\n"
+        )
+        beats = parse_txt(text)
+        blob = "\n".join((b.action + b.dialogue) for b in beats)
+        # 制作标注全部丢弃
+        for junk in ("时长", "本集任务", "开场钩子", "集尾钩子", "下集预告"):
+            self.assertNotIn(junk, blob)
+        # 无空镜头
+        self.assertTrue(all(b.action or b.dialogue for b in beats))
+        # 场景地点挂到内容节拍，而非孤立空镜头
+        located = [b for b in beats if b.location == "傅氏宴会厅"]
+        self.assertTrue(located)
+        self.assertTrue(any(b.action for b in located))
+        # 加粗角色对白被正确识别，情绪保留
+        dia = [b for b in beats if "让我们恭喜" in b.dialogue]
+        self.assertTrue(dia)
+        self.assertIn("司仪", dia[0].dialogue)
+        # 镜头调度语言归动作，不误判为对白
+        cam = [b for b in beats if "压低机位" in b.action]
+        self.assertTrue(cam)
+        self.assertFalse(any("压低机位" in b.dialogue for b in beats))
+
 
 class PromptSchemaTests(unittest.TestCase):
     def setUp(self):

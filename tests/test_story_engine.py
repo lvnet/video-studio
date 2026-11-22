@@ -71,6 +71,28 @@ class StoryEngineTest(unittest.TestCase):
         self.assertEqual(len(outlines), 2)
         self.assertTrue(all("场景：" in t for t in outlines))
 
+    def test_08_hero_name_follows_synopsis(self):
+        # 用户梗概里写明的主角名必须出现在正文里，不能被无关默认值顶替
+        synopsis = "闪婚三年，总裁的白月光是我。女主苏晚救了男主母亲却被误认。"
+        el = _extract_elements(synopsis)
+        self.assertEqual(el.hero, "苏晚")
+        body = generate_outlines(synopsis, 1)[0]
+        self.assertIn("苏晚", body)
+
+    def test_09_deterministic_across_processes(self):
+        # hash(str) 带随机盐会破坏跨进程确定性；用 md5 指纹后结果必须一致
+        import subprocess
+        import sys as _sys
+        code = (
+            "from video_studio.creation.story_engine import generate_outlines;"
+            "print('|'.join(generate_outlines('测试确定性梗概，主角林远回到旧书店',2)))"
+        )
+        results = []
+        for _ in range(2):
+            out = subprocess.check_output([_sys.executable, "-c", code], cwd=str(ROOT), text=True)
+            results.append(out.strip())
+        self.assertEqual(results[0], results[1])
+
 
 if __name__ == "__main__":
     unittest.main()

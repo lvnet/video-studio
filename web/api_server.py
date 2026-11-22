@@ -323,7 +323,7 @@ def _cascade_delete_episode(state, eid: str) -> int:
 
 
 def h_episode_update(handler, m, body, q):
-    """修改单集：集序号 / 标题 / 目标时长 / 状态。集序号冲突时与目标集自动交换。"""
+    """修改单集：集序号 / 标题 / 正文 / 目标时长 / 状态。集序号冲突时与目标集自动交换。"""
     eid = m.group(1)
     state = get_state()
     ep = state.store.get("episodes", eid)
@@ -334,6 +334,18 @@ def h_episode_update(handler, m, body, q):
         changes["duration_target"] = float(body["duration_target"] or 60)
     if "status" in body:
         changes["status"] = str(body["status"]).strip()
+    if "script_text" in body:
+        # 编辑正文：写入文本并追加一版到版本链，可追溯、可前后对照。
+        new_text = str(body["script_text"] or "")
+        changes["script_text"] = new_text
+        changes["summary"] = re.sub(r"\s+", "", new_text)[:40]
+        versions = state.store.find("script_versions", episode_id=eid)
+        state.store.add("script_versions", ScriptVersion(
+            id=new_id("sv"), episode_id=eid, version=len(versions) + 1,
+            text=new_text, before=ep.get("script_text", ""),
+            instruction=body.get("instruction", "单集正文编辑"),
+            source="manual", confirmed=False,
+        ))
     if "index" in body:
         new_index = int(body["index"] or 0)
         if new_index < 1:
@@ -1019,18 +1031,32 @@ def h_demo_init(handler, m, body, q):
         state.store.add("assets", a)
     role = assets[0]
 
-    script_path = ROOT / "examples" / "sample_script.txt"
-    text = script_path.read_text(encoding="utf-8") if script_path.exists() else ""
+    # 用本地叙事引擎按示例梗概生成三集各不相同的结构化正文，落库到 script_text。
+    # 历史 bug：示例剧集只设标题、正文全空，且三集共用同一段 sample_script——
+    # 打开项目"剧本"页一片空白，违背了"打开即可看全流程"的示例初衷。
+    synopsis = "林远回到江边码头，寻找失散的故人。"
+    outlines = get_provider().generate_outline(synopsis, 3)
     ep_titles = ["第一集·归来", "第二集·夜渡", "第三集·未竟"]
     first_shots: list[str] = []
     for idx in range(1, 4):
+        body = outlines[idx - 1] if idx - 1 < len(outlines) else ""
+        # 剥掉生成正文首行的"第X集 …"标题：目录已用 episode.title 展示，
+        # 正文从"场景："开始，与真实剧本导入后的存储形态一致，避免标题打架。
+        if body:
+            body = "\n".join(body.splitlines()[1:]).strip()
         ep = Episode(id=new_id("ep"), project_id=proj.id, index=idx,
                      title=ep_titles[idx - 1], duration_target=45,
-                     summary="前情：林远十年后回到江边旧码头。" if idx > 1 else "")
+                     script_text=body,
+                     summary=re.sub(r"\s+", "", body)[:40] if idx > 1 else "")
         state.store.add("episodes", ep)
-        if not text:
+        # 生成即留一版，版本链可追溯、可确认
+        state.store.add("script_versions", ScriptVersion(
+            id=new_id("sv"), episode_id=ep.id, version=1, text=body,
+            source="local_engine", confirmed=False,
+        ))
+        if not body:
             continue
-        beats = import_script(text, "txt")
+        beats = import_script(body, "txt")
         shots = beats_to_shots(ep, beats)
         # 注入情绪字段（演示用，原创）
         emotions = ["凝重", "克制", "怅然", "平静", "释然", "悬念"]
